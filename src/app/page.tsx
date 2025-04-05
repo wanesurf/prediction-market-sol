@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Box, Card, Flex, Grid, Text, Tabs } from "@radix-ui/themes";
 import SolcastLogo from "@/assets/Solcast.svg";
 import bg from "@/assets/bg.webp";
+import PredictionInput from "@/components/PredictionInput";
 
 export default function Home() {
   return (
@@ -47,8 +48,7 @@ export default function Home() {
           {/* Right Column */}
           <Card size="2">
             <Flex direction="column" gap="4">
-              {/* Prediction options would go here */}
-              <Box style={{ height: "400px" }}></Box>
+              <PredictionInput />
             </Flex>
           </Card>
         </Grid>
