@@ -4,6 +4,8 @@ import "./globals.css";
 import "@radix-ui/themes/styles.css";
 import { Theme } from "@radix-ui/themes";
 import AppWalletProvider from "@/components/AppWalletProvider";
+import { Toaster, toast } from "sonner";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -38,6 +40,7 @@ export default function RootLayout({
           panelBackground="translucent"
         >
           <AppWalletProvider>{children}</AppWalletProvider>
+          <Toaster />
         </Theme>
       </body>
     </html>
