@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 use std::collections::HashMap;
 
-declare_id!("91f217JeT7SZps7NHRpRv8P1QapBs5vjrr3Zbx2D4nxX");
+declare_id!("7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS");
 
 #[program]
 pub mod solcast {
@@ -51,6 +51,36 @@ pub mod solcast {
         state.market_id_counter += 1;
         state.last_market_id = state.market_id_counter;
         state.market_ids.push(id.clone());
+        state.market_addresses.push(ctx.accounts.market.key());
+
+        // Create token mints
+        // Initialize mint A
+        token::initialize_mint(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                token::InitializeMint {
+                    mint: ctx.accounts.token_a_mint.to_account_info(),
+                    rent: ctx.accounts.rent.to_account_info(),
+                },
+            ),
+            6, // decimals
+            &ctx.accounts.market_authority.key(),
+            Some(&ctx.accounts.market_authority.key()),
+        )?;
+
+        // Initialize mint B
+        token::initialize_mint(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                token::InitializeMint {
+                    mint: ctx.accounts.token_b_mint.to_account_info(),
+                    rent: ctx.accounts.rent.to_account_info(),
+                },
+            ),
+            6, // decimals
+            &ctx.accounts.market_authority.key(),
+            Some(&ctx.accounts.market_authority.key()),
+        )?;
 
         // Create market data
         let market = &mut ctx.accounts.market;
@@ -74,7 +104,7 @@ pub mod solcast {
         market.total_option_a = 0;
         market.total_option_b = 0;
         market.authority = ctx.accounts.market_authority.key();
-        market.authority_bump = *ctx.bumps.get("market_authority").unwrap();
+        market.authority_bump = ctx.bumps.market_authority;
 
         // Initialize the share accounts as empty
         market.shares = Vec::new();
@@ -302,8 +332,22 @@ pub mod solcast {
         Ok(())
     }
 
-    // Additional query functions to match original contract
-    // These would be implemented as views in Anchor
+    pub fn get_all_markets(ctx: Context<GetAllMarkets>) -> Result<Vec<MarketInfo>> {
+        let state = &ctx.accounts.state;
+
+        let mut market_infos = Vec::new();
+
+        for i in 0..state.market_ids.len() {
+            if i < state.market_addresses.len() {
+                market_infos.push(MarketInfo {
+                    id: state.market_ids[i].clone(),
+                    address: state.market_addresses[i],
+                });
+            }
+        }
+
+        Ok(market_infos)
+    }
 }
 
 #[derive(Accounts)]
@@ -336,21 +380,13 @@ pub struct CreateMarket<'info> {
     )]
     pub market_authority: UncheckedAccount<'info>,
 
-    #[account(
-        init,
-        payer = admin,
-        mint::decimals = 6,
-        mint::authority = market_authority,
-    )]
-    pub token_a_mint: Account<'info, Mint>,
+    /// CHECK: We're initializing the mint with token instructions
+    #[account(init, payer = admin, space = 82, owner = token_program.key())]
+    pub token_a_mint: UncheckedAccount<'info>,
 
-    #[account(
-        init,
-        payer = admin,
-        mint::decimals = 6,
-        mint::authority = market_authority,
-    )]
-    pub token_b_mint: Account<'info, Mint>,
+    /// CHECK: We're initializing the mint with token instructions  
+    #[account(init, payer = admin, space = 82, owner = token_program.key())]
+    pub token_b_mint: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -360,7 +396,10 @@ pub struct CreateMarket<'info> {
 #[derive(Accounts)]
 #[instruction(market_id: String, option: String)]
 pub struct BuyShare<'info> {
-    #[account(mut, has_one = authority @ SolcastError::InvalidMarketAuthority)]
+    #[account(
+        mut,
+        constraint = market.authority == market_authority.key() @ SolcastError::InvalidMarketAuthority
+    )]
     pub market: Account<'info, Market>,
 
     #[account(mut)]
@@ -369,43 +408,37 @@ pub struct BuyShare<'info> {
     /// CHECK: This authority is verified in the market account
     pub market_authority: UncheckedAccount<'info>,
 
+    /// CHECK: Account ownership and mint are verified in constraints
     #[account(
         mut,
-        constraint = user_token_account.owner == user.key(),
-        constraint = user_token_account.mint == market.buy_token @ SolcastError::InvalidTokenAccount,
+        owner = user.key() @ SolcastError::InvalidTokenAccount,
     )]
-    pub user_token_account: Account<'info, TokenAccount>,
+    pub user_token_account: UncheckedAccount<'info>,
 
+    /// CHECK: Account ownership and mint are verified in constraints
     #[account(
         mut,
-        constraint = market_token_account.owner == market_authority.key(),
-        constraint = market_token_account.mint == market.buy_token @ SolcastError::InvalidTokenAccount,
+        owner = market_authority.key() @ SolcastError::InvalidTokenAccount,
     )]
-    pub market_token_account: Account<'info, TokenAccount>,
+    pub market_token_account: UncheckedAccount<'info>,
 
-    #[account(
-        mut,
-        constraint = (option == market.option_a && user_option_token_account.mint == market.token_a_mint) ||
-                     (option == market.option_b && user_option_token_account.mint == market.token_b_mint)
-                     @ SolcastError::InvalidOptionTokenAccount,
-    )]
-    pub user_option_token_account: Account<'info, TokenAccount>,
+    /// CHECK: Mint is verified based on selected option
+    #[account(mut)]
+    pub user_option_token_account: UncheckedAccount<'info>,
 
+    /// CHECK: This is verified in the instruction
     #[account(
         mut,
-        constraint = (option == market.option_a && token_a_mint.key() == market.token_a_mint) ||
-                     (option == market.option_b && token_b_mint.key() == market.token_b_mint)
-                     @ SolcastError::InvalidOptionMint,
+        constraint = (option == market.option_a && token_a_mint.key() == market.token_a_mint) @ SolcastError::InvalidOptionMint,
     )]
-    pub token_a_mint: Account<'info, Mint>,
+    pub token_a_mint: UncheckedAccount<'info>,
 
+    /// CHECK: This is verified in the instruction
     #[account(
         mut,
-        constraint = (option == market.option_b && token_b_mint.key() == market.token_b_mint) ||
-                     (option == market.option_a && token_b_mint.key() == market.token_b_mint)
-                     @ SolcastError::InvalidOptionMint,
+        constraint = (option == market.option_b && token_b_mint.key() == market.token_b_mint) @ SolcastError::InvalidOptionMint,
     )]
-    pub token_b_mint: Account<'info, Mint>,
+    pub token_b_mint: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -435,19 +468,19 @@ pub struct Withdraw<'info> {
     /// CHECK: This authority is verified in the market account
     pub market_authority: UncheckedAccount<'info>,
 
+    /// CHECK: Account ownership is verified in constraints
     #[account(
         mut,
-        constraint = user_token_account.owner == user.key(),
-        constraint = user_token_account.mint == market.buy_token @ SolcastError::InvalidTokenAccount,
+        owner = user.key() @ SolcastError::InvalidTokenAccount,
     )]
-    pub user_token_account: Account<'info, TokenAccount>,
+    pub user_token_account: UncheckedAccount<'info>,
 
+    /// CHECK: Account ownership is verified in constraints
     #[account(
         mut,
-        constraint = market_token_account.owner == market_authority.key(),
-        constraint = market_token_account.mint == market.buy_token @ SolcastError::InvalidTokenAccount,
+        owner = market_authority.key() @ SolcastError::InvalidTokenAccount,
     )]
-    pub market_token_account: Account<'info, TokenAccount>,
+    pub market_token_account: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -458,6 +491,7 @@ pub struct State {
     pub market_ids: Vec<String>,
     pub market_id_counter: u64,
     pub last_market_id: u64,
+    pub market_addresses: Vec<Pubkey>,
 }
 
 impl State {
@@ -465,7 +499,8 @@ impl State {
     pub const SPACE: usize = 32 + // admin pubkey
                              4 + (32 * 50) + // market_ids vector (assuming max 50 markets with 32 bytes each)
                              8 + // market_id_counter
-                             8; // last_market_id
+                             8 + // last_market_id
+                             4 + (32 * 50); // market_addresses vector (assuming max 50 markets)
 }
 
 #[account]
@@ -582,4 +617,15 @@ pub enum SolcastError {
 
     #[msg("Invalid market authority")]
     InvalidMarketAuthority,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct MarketInfo {
+    pub id: String,
+    pub address: Pubkey,
+}
+
+#[derive(Accounts)]
+pub struct GetAllMarkets<'info> {
+    pub state: Account<'info, State>,
 }

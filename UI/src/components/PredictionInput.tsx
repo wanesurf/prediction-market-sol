@@ -1,31 +1,40 @@
 "use client";
-import up_higher from "@/assets/up_higher.gif";
-import decide_no from "@/assets/decide_no.gif";
-import make_decision from "@/assets/make_decision.gif";
+import React from "react";
+
+import up_higher from "../assets/up_higher.gif";
+import decide_no from "../assets/decide_no.gif";
+import make_decision from "../assets/make_decision.gif";
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, Skeleton } from "@radix-ui/themes";
 import { VoteBar } from "./VoteBar";
-import solana from "@/assets/solana-sol-logo.svg";
+import solana from "../assets/solana-sol-logo.svg";
 import { Input } from "./Input";
 import { Button } from "./Button";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PublicKey, Transaction } from "@solana/web3.js";
 import * as anchor from "@project-serum/anchor";
-import { notify } from "@/lib/notifications";
+import { notify } from "../lib/notifications";
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { BN } from "@project-serum/anchor";
+import { MarketData } from "../lib/types";
 
 // Constants
 const SOLCAST_PROGRAM_ID = new PublicKey(
-  "91f217JeT7SZps7NHRpRv8P1QapBs5vjrr3Zbx2D4nxX"
+  "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
 );
 
 export default function PredictionInput({
   marketAccount,
+  marketData,
+  loading,
+  error,
 }: {
   marketAccount: PublicKey;
+  marketData?: MarketData | null;
+  loading?: boolean;
+  error?: string | null;
 }) {
   const [tokenPrice, setTokenPrice] = useState(0);
   const [currentGif, setCurrentGif] = useState(make_decision);
@@ -33,7 +42,6 @@ export default function PredictionInput({
   const [showEstimatedWinnings, setShowEstimatedWinnings] = useState(false);
   const [option, setOption] = useState<"YES" | "NO">("YES");
   const [isLoading, setIsLoading] = useState(false);
-  const [marketData, setMarketData] = useState<any>(null);
   const [odds, setOdds] = useState<{ oddsA: number; oddsB: number }>({
     oddsA: 0,
     oddsB: 0,
@@ -45,6 +53,26 @@ export default function PredictionInput({
 
   const { publicKey, connected, sendTransaction } = useWallet();
   const { connection } = useConnection();
+
+  // Calculate odds when market data changes
+  useEffect(() => {
+    if (marketData) {
+      const totalA = marketData.totalOptionA || 0;
+      const totalB = marketData.totalOptionB || 0;
+
+      const calculatedOdds = {
+        oddsA: totalA > 0 ? totalB / totalA : 0,
+        oddsB: totalB > 0 ? totalA / totalB : 0,
+      };
+
+      setOdds(calculatedOdds);
+
+      // Update potential winnings if amount is set
+      if (amount) {
+        calculatePotentialWinnings(calculatedOdds, Number(amount));
+      }
+    }
+  }, [marketData, amount]);
 
   // Initialize Solcast program
   const getProgram = useCallback(async () => {
@@ -348,10 +376,11 @@ export default function PredictionInput({
   // Calculate yes/no percentages for display
   const yesPercentage =
     marketData &&
-    marketData.totalOptionA.toNumber() + marketData.totalOptionB.toNumber() > 0
-      ? (marketData.totalOptionA.toNumber() /
-          (marketData.totalOptionA.toNumber() +
-            marketData.totalOptionB.toNumber())) *
+    marketData.totalOptionA &&
+    marketData.totalOptionB &&
+    marketData.totalOptionA + marketData.totalOptionB > 0
+      ? (marketData.totalOptionA /
+          (marketData.totalOptionA + marketData.totalOptionB)) *
         100
       : 50;
 
@@ -559,9 +588,16 @@ export default function PredictionInput({
 
           {/* Display user's current position if they have shares */}
           {connected &&
+            marketData &&
             marketData.shares &&
-            marketData.shares.some((share: any) =>
-              share.user.equals(publicKey || PublicKey.default)
+            Array.isArray(marketData.shares) &&
+            marketData.shares.some(
+              (share: any) =>
+                share &&
+                share.user &&
+                typeof share.user === "object" &&
+                share.user.toString() ===
+                  (publicKey || PublicKey.default).toString()
             ) && (
               <div className="mt-4 p-3 bg-indigo-900/30 rounded-lg">
                 <h4 className="text-sm font-medium text-white mb-2">
@@ -569,8 +605,13 @@ export default function PredictionInput({
                 </h4>
                 <div className="space-y-2">
                   {marketData.shares
-                    .filter((share: any) =>
-                      share.user.equals(publicKey || PublicKey.default)
+                    .filter(
+                      (share: any) =>
+                        share &&
+                        share.user &&
+                        typeof share.user === "object" &&
+                        share.user.toString() ===
+                          (publicKey || PublicKey.default).toString()
                     )
                     .map((share: any, index: number) => (
                       <div key={index} className="flex justify-between text-sm">

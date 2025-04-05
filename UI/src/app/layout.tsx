@@ -1,11 +1,13 @@
+"use client";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@radix-ui/themes/styles.css";
 import { Theme } from "@radix-ui/themes";
-import AppWalletProvider from "@/components/AppWalletProvider";
+import AppWalletProvider from "../components/AppWalletProvider";
 import { Toaster, toast } from "sonner";
-import { SonnerToaster } from "@/components/SoonerToaster";
+import { SonnerToaster } from "../components/SoonerToaster";
+import React from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,10 +19,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "SolCast ",
-  description: "Predict the future on Solana",
-};
+// export const metadata: Metadata = {
+//   title: "SolCast ",
+//   description: "Predict the future on Solana",
+// };
 
 export default function RootLayout({
   children,
