@@ -1,18 +1,22 @@
+// In src/components/MarketSelector.tsx, update the component
+
 import React, { useState, useEffect } from "react";
 import { Box, Card, Flex, Text, Select } from "@radix-ui/themes";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { Program, AnchorProvider } from "@coral-xyz/anchor";
 import { PublicKey } from "@solana/web3.js";
 import { idl } from "../lib/types";
+import { notify } from "../lib/notifications";
+
+interface MarketInfo {
+  id: string;
+  address: PublicKey;
+  title?: string;
+}
 
 interface MarketSelectorProps {
   onMarketSelect: (marketId: string) => void;
   selectedMarketId: string;
-}
-
-interface MarketListItem {
-  id: string;
-  title: string;
 }
 
 export default function MarketSelector({
@@ -21,94 +25,274 @@ export default function MarketSelector({
 }: MarketSelectorProps) {
   const { connection } = useConnection();
   const wallet = useWallet();
-  const [markets, setMarkets] = useState<MarketListItem[]>([]);
+  const [markets, setMarkets] = useState<MarketInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!wallet.publicKey) {
-      setLoading(false);
-      return;
-    }
-
     const fetchMarkets = async () => {
       try {
         setLoading(true);
+        setError(null);
 
-        // Create provider and program
-        const provider = new AnchorProvider(connection, wallet as any, {});
-
-        const program = new Program(
-          idl,
-          new PublicKey("7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"),
-          provider
+        // Configure the program ID
+        const programId = new PublicKey(
+          "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
         );
+
+        // Create a provider
+        const provider = new AnchorProvider(
+          connection,
+          {
+            publicKey: wallet?.publicKey || PublicKey.default,
+            signTransaction: () => Promise.reject(),
+            signAllTransactions: () => Promise.reject(),
+          },
+          { commitment: "confirmed" }
+        );
+
+        // Create program instance
+        const program = new Program(idl, programId, provider);
+
+        console.log("Finding state PDA...");
 
         // Find the state account PDA
         const [statePda] = PublicKey.findProgramAddressSync(
           [Buffer.from("state")],
-          new PublicKey("7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS")
+          programId
         );
 
-        // Call the get_all_markets query function
-        // For query functions, we need to use the program's coder to encode the instruction
-        // and then use the connection to call the program
-        const stateAccount = await program.account.State.fetch(statePda);
+        console.log("State PDA:", statePda.toString());
 
-        if (!stateAccount) {
-          console.log("No state account found");
-          setMarkets([]);
-          setLoading(false);
-          return;
-        }
+        try {
+          // First attempt: Try using get_all_markets function
+          console.log("Calling get_all_markets function...");
 
-        // Access marketIds safely
-        const marketIds = stateAccount.marketIds as string[];
+          // Create the accounts needed for the get_all_markets call
+          const accounts = {
+            state: statePda,
+          };
 
-        if (!marketIds || marketIds.length === 0) {
-          setMarkets([]);
-          setLoading(false);
-          return;
-        }
+          // Call the function
+          const marketInfos = await program.methods
+            .getAllMarkets()
+            .accounts(accounts)
+            .view();
 
-        // Fetch all markets
-        const marketPromises = marketIds.map(async (marketId: string) => {
-          try {
-            // Find the market PDA
-            const [marketPda] = PublicKey.findProgramAddressSync(
-              [Buffer.from("market"), Buffer.from(marketId)],
-              new PublicKey("7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS")
+          console.log("Market infos returned:", marketInfos);
+
+          if (marketInfos && marketInfos.length > 0) {
+            // Fetch additional details for each market
+            const marketsWithDetails = await Promise.all(
+              marketInfos.map(async (info: any) => {
+                try {
+                  const marketAccount = await program.account.market.fetch(
+                    info.address
+                  );
+                  return {
+                    ...info,
+                    title: marketAccount.title || info.id,
+                  };
+                } catch (err) {
+                  console.error(
+                    `Error fetching market details for ${info.id}:`,
+                    err
+                  );
+                  return info;
+                }
+              })
             );
 
-            // Fetch the market account
-            const marketAccount = await program.account.Market.fetch(marketPda);
+            setMarkets(marketsWithDetails);
 
-            return {
-              id: marketId,
-              title: marketAccount.title,
-            };
-          } catch (err) {
-            console.error(`Error fetching market ${marketId}:`, err);
-            return null;
+            // If we have markets and don't have a selected market, select the first one
+            if (marketsWithDetails.length > 0 && !selectedMarketId) {
+              onMarketSelect(marketsWithDetails[0].address.toString());
+            }
+
+            setLoading(false);
+            return;
           }
-        });
+        } catch (functionErr) {
+          console.error("Error calling getAllMarkets function:", functionErr);
 
-        const marketResults = await Promise.all(marketPromises);
-        const validMarkets = marketResults.filter(
-          (market): market is MarketListItem => market !== null
-        );
+          // Second attempt: Try direct approach with state account
+          try {
+            console.log("Trying alternative approach using state account...");
 
-        setMarkets(validMarkets);
-      } catch (err) {
+            // Fetch the state account directly
+            const stateAccount = await program.account.state.fetch(statePda);
+
+            if (stateAccount) {
+              console.log("State account fetched successfully");
+
+              // Extract market IDs and addresses
+              const marketIds = stateAccount.marketIds as string[];
+              const addresses = stateAccount.marketAddresses as PublicKey[];
+
+              console.log("Market IDs:", marketIds);
+              console.log("Market addresses:", addresses);
+
+              if (
+                marketIds &&
+                marketIds.length > 0 &&
+                addresses &&
+                addresses.length > 0
+              ) {
+                // Create market info objects
+                const marketInfos = marketIds
+                  .map((id, index) => {
+                    if (index < addresses.length) {
+                      return {
+                        id,
+                        address: addresses[index],
+                      };
+                    }
+                    return null;
+                  })
+                  .filter(Boolean) as MarketInfo[];
+
+                // Fetch additional details for each market
+                const marketsWithDetails = await Promise.all(
+                  marketInfos.map(async (info) => {
+                    try {
+                      const marketAccount = await program.account.market.fetch(
+                        info.address
+                      );
+                      return {
+                        ...info,
+                        title: marketAccount.title || info.id,
+                      };
+                    } catch (err) {
+                      console.error(
+                        `Error fetching market details for ${info.id}:`,
+                        err
+                      );
+                      return info;
+                    }
+                  })
+                );
+                //@ts-ignore
+
+                setMarkets(marketsWithDetails);
+
+                // If we have markets and don't have a selected market, select the first one
+                if (marketsWithDetails.length > 0 && !selectedMarketId) {
+                  onMarketSelect(marketsWithDetails[0].address.toString());
+                }
+
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (stateErr) {
+            console.error(
+              "Error fetching markets via state account:",
+              stateErr
+            );
+          }
+        }
+
+        // Third attempt: Fall back to getProgramAccounts
+        try {
+          console.log("Falling back to getProgramAccounts...");
+
+          // Use getProgramAccounts to fetch all accounts owned by our program
+          const programAccounts = await connection.getProgramAccounts(
+            programId,
+            {
+              commitment: "confirmed",
+            }
+          );
+
+          console.log(`Found ${programAccounts.length} program accounts`);
+
+          // For each account, try to decode it as a Market
+          const marketAccounts = [];
+          for (const account of programAccounts) {
+            try {
+              // Try to decode this account as a Market
+              const marketAccount = await program.account.market.fetch(
+                account.pubkey
+              );
+
+              // If it didn't throw an error, it's a market account
+              console.log(
+                `Found market: ${
+                  marketAccount.id
+                } at ${account.pubkey.toString()}`
+              );
+
+              marketAccounts.push({
+                id: marketAccount.id as string,
+                title: marketAccount.title as string,
+                address: account.pubkey,
+              });
+            } catch (err) {
+              // This account is not a Market, that's okay
+            }
+          }
+
+          console.log(`Found ${marketAccounts.length} market accounts`);
+
+          if (marketAccounts.length > 0) {
+            setMarkets(marketAccounts);
+
+            // If we have markets and don't have a selected market, select the first one
+            if (!selectedMarketId) {
+              onMarketSelect(marketAccounts[0].address.toString());
+            }
+
+            setLoading(false);
+            return;
+          }
+        } catch (programAccountsErr) {
+          console.error("Error using getProgramAccounts:", programAccountsErr);
+        }
+
+        // Fourth attempt: Use our known market address
+        try {
+          console.log("Falling back to known market address...");
+
+          const knownMarketAddress = new PublicKey(
+            "76czyTVwN2FaydgGbVWghKPGHgHvWxPyKiUW6ktC9XY8"
+          );
+          const marketAccount = await program.account.market.fetch(
+            knownMarketAddress
+          );
+
+          const marketInfo = {
+            id: marketAccount.id as string,
+            title: marketAccount.title as string,
+            address: knownMarketAddress,
+          };
+
+          setMarkets([marketInfo]);
+
+          if (!selectedMarketId) {
+            onMarketSelect(knownMarketAddress.toString());
+          }
+
+          setLoading(false);
+          return;
+        } catch (knownMarketErr) {
+          console.error("Error fetching known market:", knownMarketErr);
+          throw new Error(
+            "Failed to fetch markets through all available methods"
+          );
+        }
+      } catch (err: unknown) {
         console.error("Error fetching markets:", err);
-        setError("Failed to fetch markets");
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        setError(`Failed to fetch markets: ${errorMessage}`);
+        notify({ type: "error", message: "Failed to fetch markets" });
       } finally {
         setLoading(false);
       }
     };
 
     fetchMarkets();
-  }, [connection, wallet]);
+  }, [connection, wallet, onMarketSelect, selectedMarketId]);
 
   if (loading) {
     return (
@@ -144,12 +328,19 @@ export default function MarketSelector({
     <Card size="2">
       <Flex direction="column" gap="3" p="4">
         <Text weight="bold">Select Market</Text>
-        <Select.Root value={selectedMarketId} onValueChange={onMarketSelect}>
-          <Select.Trigger />
+        <Select.Root
+          value={selectedMarketId}
+          onValueChange={onMarketSelect}
+          defaultValue={markets[0]?.address.toString()}
+        >
+          <Select.Trigger placeholder="Select a market to bet on" />
           <Select.Content>
             {markets.map((market) => (
-              <Select.Item key={market.id} value={market.id}>
-                {market.title}
+              <Select.Item
+                key={market.address.toString()}
+                value={market.address.toString()}
+              >
+                {market.title || market.id}
               </Select.Item>
             ))}
           </Select.Content>

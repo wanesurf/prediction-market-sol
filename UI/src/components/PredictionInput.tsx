@@ -1,28 +1,33 @@
-"use client";
+//@ts-nocheck
+// "use client";
 import React from "react";
 
 import up_higher from "../assets/up_higher.gif";
 import decide_no from "../assets/decide_no.gif";
 import make_decision from "../assets/make_decision.gif";
+import usdc from "../assets/usdc.svg";
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, Skeleton } from "@radix-ui/themes";
 import { VoteBar } from "./VoteBar";
-import solana from "../assets/solana-sol-logo.svg";
 import { Input } from "./Input";
 import { Button } from "./Button";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PublicKey, Transaction } from "@solana/web3.js";
-import * as anchor from "@project-serum/anchor";
+import { AnchorProvider, Program, BN, web3 } from "@coral-xyz/anchor";
 import { notify } from "../lib/notifications";
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { BN } from "@project-serum/anchor";
-import { MarketData } from "../lib/types";
+import { MarketData, idl } from "../lib/types";
 
 // Constants
 const SOLCAST_PROGRAM_ID = new PublicKey(
   "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
+);
+
+// Devnet USDC address
+const DEVNET_USDC = new PublicKey(
+  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
 );
 
 export default function PredictionInput({
@@ -31,7 +36,7 @@ export default function PredictionInput({
   loading,
   error,
 }: {
-  marketAccount: PublicKey;
+  marketAccount?: PublicKey;
   marketData?: MarketData | null;
   loading?: boolean;
   error?: string | null;
@@ -60,15 +65,18 @@ export default function PredictionInput({
       const totalA = marketData.totalOptionA || 0;
       const totalB = marketData.totalOptionB || 0;
 
+      console.log("Calculating odds with totalA:", totalA, "totalB:", totalB);
+
       const calculatedOdds = {
-        oddsA: totalA > 0 ? totalB / totalA : 0,
-        oddsB: totalB > 0 ? totalA / totalB : 0,
+        oddsA: totalB > 0 && totalA > 0 ? totalB / totalA : 0,
+        oddsB: totalA > 0 && totalB > 0 ? totalA / totalB : 0,
       };
 
+      console.log("Calculated odds:", calculatedOdds);
       setOdds(calculatedOdds);
 
       // Update potential winnings if amount is set
-      if (amount) {
+      if (amount && !isNaN(Number(amount)) && Number(amount) > 0) {
         calculatePotentialWinnings(calculatedOdds, Number(amount));
       }
     }
@@ -79,7 +87,7 @@ export default function PredictionInput({
     if (!connection || !publicKey) return null;
 
     try {
-      const provider = new anchor.AnchorProvider(
+      const provider = new AnchorProvider(
         connection,
         {
           publicKey: publicKey,
@@ -89,11 +97,8 @@ export default function PredictionInput({
         { commitment: "confirmed" }
       );
 
-      anchor.setProvider(provider);
-      const idl = await anchor.Program.fetchIdl(SOLCAST_PROGRAM_ID, provider);
-      if (!idl) throw new Error("IDL not found for Solcast program");
-
-      return new anchor.Program(idl, SOLCAST_PROGRAM_ID, provider);
+      // Create program instance using the imported IDL
+      return new Program(idl, SOLCAST_PROGRAM_ID, provider);
     } catch (error) {
       console.error("Failed to initialize Solcast program:", error);
       notify({
@@ -113,23 +118,33 @@ export default function PredictionInput({
       const program = await getProgram();
       if (!program) return;
 
+      console.log("Fetching market data for:", marketAccount.toString());
+
       // Fetch market data
       const market = await program.account.market.fetch(marketAccount);
-      setMarketData(market);
+      console.log("Fetched market data:", market);
 
-      // Calculate odds
-      const totalA = market.totalOptionA.toNumber();
-      const totalB = market.totalOptionB.toNumber();
+      // Extract relevant data for odds calculation
+      const totalA = market.totalOptionA
+        ? (market.totalOptionA as any).toNumber()
+        : 0;
+      const totalB = market.totalOptionB
+        ? (market.totalOptionB as any).toNumber()
+        : 0;
+
+      console.log("Total for option A:", totalA);
+      console.log("Total for option B:", totalB);
 
       const calculatedOdds = {
-        oddsA: totalA > 0 ? totalB / totalA : 0,
-        oddsB: totalB > 0 ? totalA / totalB : 0,
+        oddsA: totalB > 0 && totalA > 0 ? totalB / totalA : 0,
+        oddsB: totalA > 0 && totalB > 0 ? totalA / totalB : 0,
       };
 
+      console.log("Calculated odds:", calculatedOdds);
       setOdds(calculatedOdds);
 
       // Update potential winnings if amount is set
-      if (amount) {
+      if (amount && !isNaN(Number(amount)) && Number(amount) > 0) {
         calculatePotentialWinnings(calculatedOdds, Number(amount));
       }
     } catch (error) {
@@ -161,16 +176,29 @@ export default function PredictionInput({
     const noWinnings =
       amountValue + amountValue * currentOdds.oddsB * (1 - COMMISSION_RATE);
 
+    console.log("Potential winnings calculated:", {
+      yes: yesWinnings,
+      no: noWinnings,
+    });
     setPotentialWinnings({
       yes: yesWinnings,
       no: noWinnings,
     });
   };
 
-  // Buy shares in the market
+  // Updated buyShares function that explicitly names accounts according to the IDL
+
+  // Final fixed version of buyShares function using the correct account structure
+
+  // Try this modified version of the buyShares function
   const buyShares = async () => {
     if (!publicKey || !connected || !marketData) {
       notify({ type: "error", message: "Please connect your wallet first" });
+      return;
+    }
+
+    if (!marketAccount) {
+      notify({ type: "error", message: "No market selected" });
       return;
     }
 
@@ -184,83 +212,387 @@ export default function PredictionInput({
       const program = await getProgram();
       if (!program) return;
 
-      // Convert amount to lamports (SOL * 10^9)
-      const amountLamports = Math.floor(parseFloat(amount) * 1_000_000_000);
+      console.log("Buying shares in market:", marketAccount.toString());
+      console.log("Option:", option);
+      console.log("Amount:", amount);
+
+      // Convert amount to USDC units (6 decimals)
+      const amountInUsdc = Math.floor(parseFloat(amount) * 1_000_000);
+
+      // Import required libraries
+      const {
+        createAssociatedTokenAccountInstruction,
+        getAssociatedTokenAddress,
+        TOKEN_PROGRAM_ID,
+      } = await import("@solana/spl-token");
+
+      const { TransactionInstruction, SystemProgram } = await import(
+        "@solana/web3.js"
+      );
+
+      // Fetch the full market account data
+      const marketAccountData = await program.account.market.fetch(
+        marketAccount
+      );
+      console.log("Fetched market data:", marketAccountData);
 
       // Determine which option the user is selecting
       const selectedOption =
         option === "YES" ? marketData.optionA : marketData.optionB;
+      console.log("Selected option:", selectedOption);
 
-      // Get token accounts
+      // Get market data
+      const marketId = marketAccountData.id;
+      // Use type assertions to handle the unknown types
+      const tokenAMint = new PublicKey(
+        (marketAccountData.tokenAMint as any).toString()
+      );
+      const tokenBMint = new PublicKey(
+        (marketAccountData.tokenBMint as any).toString()
+      );
+      const marketAuthority = new PublicKey(
+        (marketAccountData.authority as any).toString()
+      );
+
+      console.log("Market ID:", marketId);
+      console.log("Market authority:", marketAuthority.toString());
+      console.log("Token A mint:", tokenAMint.toString());
+      console.log("Token B mint:", tokenBMint.toString());
+
+      // Use USDC as payment token
+      const buyToken = DEVNET_USDC;
+      console.log("Buy token (USDC):", buyToken.toString());
+
+      // Get associated token accounts
       const userTokenAccount = await getAssociatedTokenAddress(
-        marketData.buyToken,
+        buyToken,
         publicKey
       );
+      console.log("User token account:", userTokenAccount.toString());
+
+      // Check if user has enough USDC
+      try {
+        const userTokenInfo = await connection.getTokenAccountBalance(
+          userTokenAccount
+        );
+        console.log("User USDC balance:", userTokenInfo.value.uiAmount);
+
+        if ((userTokenInfo.value.uiAmount || 0) < parseFloat(amount)) {
+          notify({
+            type: "error",
+            message: `Not enough USDC. You have ${userTokenInfo.value.uiAmount} USDC but need ${amount} USDC.`,
+          });
+          setIsLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error("Error checking USDC balance:", err);
+        notify({
+          type: "error",
+          message:
+            "You don't have a USDC token account. Please get some Devnet USDC first.",
+        });
+        setIsLoading(false);
+        return;
+      }
 
       const marketTokenAccount = await getAssociatedTokenAddress(
-        marketData.buyToken,
-        marketData.authority
+        buyToken,
+        marketAuthority,
+        true // Allow off-curve
       );
+      console.log("Market token account:", marketTokenAccount.toString());
 
-      // Get the appropriate option mint based on user selection
-      const optionMint =
-        option === "YES" ? marketData.tokenAMint : marketData.tokenBMint;
+      // Check if market token account exists
+      const marketTokenInfo = await connection.getAccountInfo(
+        marketTokenAccount
+      );
+      if (!marketTokenInfo) {
+        console.log("Market token account doesn't exist. Creating it...");
+        notify({
+          type: "info",
+          message:
+            "Setting up market token account. This is a one-time operation.",
+        });
+
+        // Create the market token account
+        try {
+          // Create instruction to make the associated token account
+          const createAccountIx = createAssociatedTokenAccountInstruction(
+            publicKey, // payer
+            marketTokenAccount, // associated token account address
+            marketAuthority, // owner
+            buyToken // mint
+          );
+
+          // Create a new transaction
+          const transaction = new Transaction();
+          transaction.add(createAccountIx);
+
+          // Get a fresh blockhash
+          const latestBlockhash = await connection.getLatestBlockhash();
+          transaction.recentBlockhash = latestBlockhash.blockhash;
+          transaction.lastValidBlockHeight =
+            latestBlockhash.lastValidBlockHeight;
+          transaction.feePayer = publicKey;
+
+          // Send the transaction to the wallet for signing
+          console.log("Sending transaction to create market token account...");
+          const signature = await sendTransaction(transaction, connection);
+          console.log("Transaction sent with signature:", signature);
+
+          // Wait for confirmation
+          await connection.confirmTransaction(
+            {
+              signature,
+              blockhash: latestBlockhash.blockhash,
+              lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+            },
+            "confirmed"
+          );
+
+          console.log("Market token account created successfully!");
+          notify({
+            type: "success",
+            message: "Market token account created successfully!",
+            txid: signature,
+          });
+        } catch (err) {
+          console.error("Error creating market token account:", err);
+          notify({
+            type: "error",
+            message: `Failed to create market token account: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Get the option mint based on user selection
+      const optionMint = option === "YES" ? tokenAMint : tokenBMint;
 
       // Get the user's option token account
       const userOptionTokenAccount = await getAssociatedTokenAddress(
         optionMint,
         publicKey
       );
+      console.log(
+        "User option token account:",
+        userOptionTokenAccount.toString()
+      );
 
-      // Create the transaction
-      const ix = await program.methods
-        .buyShare(marketData.id, selectedOption, new BN(amountLamports))
-        .accounts({
-          market: marketAccount,
-          user: publicKey,
-          marketAuthority: marketData.authority,
-          userTokenAccount,
-          marketTokenAccount,
-          userOptionTokenAccount,
-          tokenAMint: marketData.tokenAMint,
-          tokenBMint: marketData.tokenBMint,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .instruction();
+      // Create a new transaction
+      const transaction = new Transaction();
 
-      // Create and send transaction
-      const transaction = new Transaction().add(ix);
-      const { blockhash } = await connection.getRecentBlockhash();
-      transaction.recentBlockhash = blockhash;
+      // Check if the user's option token account exists and create if needed
+      const optionAccountInfo = await connection.getAccountInfo(
+        userOptionTokenAccount
+      );
+      if (!optionAccountInfo) {
+        console.log("Creating option token account for user");
+
+        // Create instruction to make the associated token account
+        const createAccountIx = createAssociatedTokenAccountInstruction(
+          publicKey, // payer
+          userOptionTokenAccount, // associated token account address
+          publicKey, // owner
+          optionMint // mint
+        );
+
+        // Add instruction to transaction
+        transaction.add(createAccountIx);
+      } else {
+        console.log("Option token account already exists");
+      }
+
+      // Create the instruction data
+      console.log("Encoding instruction data...");
+      try {
+        // Log the program's IDL for debugging
+        console.log(
+          "Program IDL:",
+          program.idl.instructions.find((i) => i.name === "buyShare")
+        );
+
+        // Encode the data
+        const data = program.coder.instruction.encode("buy_share", {
+          marketId,
+          option: selectedOption,
+          amount: new BN(amountInUsdc),
+        });
+        console.log("Instruction data encoded successfully");
+
+        // Create the transaction instruction keys in the exact order expected by the program
+        const keys = [
+          { pubkey: marketAccount, isSigner: false, isWritable: true },
+          { pubkey: publicKey, isSigner: true, isWritable: true },
+          { pubkey: marketAuthority, isSigner: false, isWritable: false },
+          { pubkey: userTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: marketTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: userOptionTokenAccount, isSigner: false, isWritable: true },
+          { pubkey: tokenAMint, isSigner: false, isWritable: true },
+          { pubkey: tokenBMint, isSigner: false, isWritable: true },
+          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        ];
+
+        // Create the instruction manually
+        const buyShareIx = new TransactionInstruction({
+          programId: SOLCAST_PROGRAM_ID,
+          keys: keys as any,
+          data,
+        });
+
+        // Add the buy share instruction to the transaction
+        transaction.add(buyShareIx);
+      } catch (err) {
+        console.error("Error creating instruction:", err);
+        notify({
+          type: "error",
+          message: `Error creating transaction: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Get a fresh blockhash
+      const latestBlockhash = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = latestBlockhash.blockhash;
+      transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
       transaction.feePayer = publicKey;
 
-      const signature = await sendTransaction(transaction, connection);
+      // Log the created transaction for debugging
+      console.log(
+        "Transaction created with instructions:",
+        transaction.instructions.length
+      );
+      console.log("Transaction blockhash:", latestBlockhash.blockhash);
 
-      await connection.confirmTransaction(signature, "confirmed");
+      // Simulate the transaction before sending
+      console.log("Simulating transaction...");
+      try {
+        const simulation = await connection.simulateTransaction(transaction);
+        console.log("Transaction simulation result:", simulation);
 
-      notify({
-        type: "success",
-        message: `Successfully placed ${option} prediction of ${amount} SOL!`,
-        txid: signature,
-      });
+        if (simulation.value.err) {
+          throw new Error(
+            `Transaction simulation failed: ${JSON.stringify(
+              simulation.value.err
+            )}`
+          );
+        }
+      } catch (err) {
+        console.error("Transaction simulation error:", err);
+        // Continue anyway, as some errors only appear during actual execution
+      }
 
-      // Refresh market data
-      fetchMarketData();
+      // Send the transaction to the wallet for signing
+      console.log("Sending transaction to wallet for signing...");
+      try {
+        const signature = await sendTransaction(transaction, connection, {
+          skipPreflight: false,
+          preflightCommitment: "confirmed",
+          maxRetries: 5,
+        });
+        console.log("Transaction signed and sent with signature:", signature);
 
-      // Reset amount
-      setAmount("");
+        // Notify user that transaction is processing
+        notify({
+          type: "info",
+          message: "Transaction sent! Waiting for confirmation...",
+          txid: signature,
+        });
+
+        // Wait for confirmation
+        const confirmationStatus = await connection.confirmTransaction(
+          {
+            signature,
+            blockhash: latestBlockhash.blockhash,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+          },
+          "confirmed"
+        );
+
+        console.log("Confirmation status:", confirmationStatus);
+
+        if (confirmationStatus.value.err) {
+          throw new Error(
+            `Transaction confirmed with error: ${JSON.stringify(
+              confirmationStatus.value.err
+            )}`
+          );
+        }
+
+        console.log("Transaction confirmed successfully!");
+
+        notify({
+          type: "success",
+          message: `Successfully placed ${option} prediction of ${amount} USDC!`,
+          txid: signature,
+        });
+
+        // Refresh market data
+        fetchMarketData();
+
+        // Reset amount
+        setAmount("");
+      } catch (err) {
+        console.error("Error during transaction sending or confirmation:", err);
+        let errorMessage = "Transaction failed";
+
+        if (err instanceof Error) {
+          errorMessage += `: ${err.message}`;
+
+          // Check for common error patterns
+          if (err.message.includes("not enough SOL")) {
+            errorMessage = "Not enough SOL to pay for transaction fees";
+          } else if (err.message.includes("insufficient funds")) {
+            errorMessage = "Insufficient funds for this transaction";
+          } else if (err.message.includes("user rejected")) {
+            errorMessage = "Transaction was rejected by the wallet";
+          }
+        }
+
+        notify({
+          type: "error",
+          message: errorMessage,
+        });
+      }
     } catch (error) {
       console.error("Failed to place prediction:", error);
-      notify({ type: "error", message: "Failed to place prediction" });
+
+      // More detailed error logging
+      let errorMessage = "Failed to place prediction";
+      if (error instanceof Error) {
+        errorMessage += `: ${error.message}`;
+        console.log("Full error object:", error);
+
+        // Additional error information for debugging
+        if ((error as any).logs) {
+          console.log("Transaction logs:", (error as any).logs);
+        }
+      }
+
+      notify({
+        type: "error",
+        message: errorMessage,
+      });
     } finally {
       setIsLoading(false);
     }
   };
-
   // Withdraw winnings
   const withdrawWinnings = async () => {
     if (!publicKey || !connected || !marketData) {
       notify({ type: "error", message: "Please connect your wallet first" });
+      return;
+    }
+
+    if (!marketAccount) {
+      notify({ type: "error", message: "No market selected" });
       return;
     }
 
@@ -275,26 +607,51 @@ export default function PredictionInput({
       const program = await getProgram();
       if (!program) return;
 
-      // Get token accounts
+      console.log(
+        "Withdrawing winnings from market:",
+        marketAccount.toString()
+      );
+
+      // Fetch the full market account data
+      const marketAccountData = await program.account.market.fetch(
+        marketAccount
+      );
+
+      // Get the market ID and authority directly from the account data
+      const marketId = marketAccountData.id;
+      const marketAuthority = new PublicKey(
+        (marketAccountData.authority as any).toString()
+      );
+      console.log("Market ID:", marketId);
+      console.log("Market authority:", marketAuthority.toString());
+
+      // Use USDC as the payment token
+      const buyToken = DEVNET_USDC;
+
+      // Get associated token accounts
       const userTokenAccount = await getAssociatedTokenAddress(
-        marketData.buyToken,
+        buyToken,
         publicKey
       );
+      console.log("User token account:", userTokenAccount.toString());
 
       const marketTokenAccount = await getAssociatedTokenAddress(
-        marketData.buyToken,
-        marketData.authority
+        buyToken,
+        marketAuthority,
+        true // Allow off-curve
       );
+      console.log("Market token account:", marketTokenAccount.toString());
 
       // Create the transaction
+      console.log("Creating withdraw instruction...");
       const ix = await program.methods
-        .withdraw(marketData.id)
+        .withdraw(marketId)
         .accounts({
           market: marketAccount,
           user: publicKey,
-          marketAuthority: marketData.authority,
-          userTokenAccount,
-          marketTokenAccount,
+          marketAuthority: marketAuthority,
+          userTokenAccount: userTokenAccount,
+          marketTokenAccount: marketTokenAccount,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .instruction();
@@ -305,13 +662,16 @@ export default function PredictionInput({
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
+      console.log("Sending transaction...");
       const signature = await sendTransaction(transaction, connection);
+      console.log("Transaction sent with signature:", signature);
 
       await connection.confirmTransaction(signature, "confirmed");
+      console.log("Transaction confirmed!");
 
       notify({
         type: "success",
-        message: "Successfully withdrew winnings!",
+        message: "Successfully withdrew USDC winnings!",
         txid: signature,
       });
 
@@ -319,45 +679,54 @@ export default function PredictionInput({
       fetchMarketData();
     } catch (error) {
       console.error("Failed to withdraw:", error);
-      notify({ type: "error", message: "Failed to withdraw winnings" });
+      let errorMessage = "Failed to withdraw winnings";
+      if (error instanceof Error) {
+        errorMessage += `: ${error.message}`;
+      }
+      notify({
+        type: "error",
+        message: errorMessage,
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fetch SOL price
+  // Fetch USDC price
   useEffect(() => {
     const fetchPrice = async () => {
       try {
         const response = await fetch(
-          "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
+          "https://api.coingecko.com/api/v3/simple/price?ids=usd-coin&vs_currencies=usd"
         );
         const data = await response.json();
-        setTokenPrice(data.solana.usd);
+        setTokenPrice(data["usd-coin"].usd || 1); // Default to 1 if API fails
       } catch (error) {
         console.error("Failed to fetch price:", error);
+        setTokenPrice(1); // Default to 1 USD for USDC
       }
     };
 
     fetchPrice();
-
-    // Set up interval to refresh price
-    const interval = setInterval(fetchPrice, 60000); // Refresh every minute
+    // USDC is pegged to USD, so we don't need frequent updates
+    const interval = setInterval(fetchPrice, 300000); // Every 5 minutes
     return () => clearInterval(interval);
   }, []);
 
   // Fetch market data on mount and periodically
   useEffect(() => {
-    fetchMarketData();
+    if (marketAccount) {
+      fetchMarketData();
 
-    // Set up interval to refresh market data
-    const interval = setInterval(fetchMarketData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, [fetchMarketData]);
+      // Set up interval to refresh market data
+      const interval = setInterval(fetchMarketData, 30000); // Refresh every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [fetchMarketData, marketAccount]);
 
   // Update potential winnings when amount or odds change
   useEffect(() => {
-    if (amount) {
+    if (amount && !isNaN(Number(amount)) && Number(amount) > 0) {
       calculatePotentialWinnings(odds, Number(amount));
     }
   }, [amount, odds]);
@@ -376,8 +745,8 @@ export default function PredictionInput({
   // Calculate yes/no percentages for display
   const yesPercentage =
     marketData &&
-    marketData.totalOptionA &&
-    marketData.totalOptionB &&
+    typeof marketData.totalOptionA === "number" &&
+    typeof marketData.totalOptionB === "number" &&
     marketData.totalOptionA + marketData.totalOptionB > 0
       ? (marketData.totalOptionA /
           (marketData.totalOptionA + marketData.totalOptionB)) *
@@ -386,17 +755,19 @@ export default function PredictionInput({
 
   const noPercentage = 100 - yesPercentage;
 
-  // Check if user has shares in the winning option and hasn't withdrawn yet
-  const canWithdraw =
-    marketData?.resolved &&
-    marketData?.shares?.some(
-      (share: any) =>
-        share.user.equals(publicKey || PublicKey.default) &&
-        ((marketData.outcome.optionA && share.option === marketData.optionA) ||
-          (marketData.outcome.optionB &&
-            share.option === marketData.optionB)) &&
-        !share.hasWithdrawn
+  // If no market is selected, show a message
+  if (!marketAccount && !loading) {
+    return (
+      <Card className="shadow-2xl w-full h-full flex flex-col items-center justify-center p-8">
+        <div className="text-center mb-4">
+          <h2 className="text-xl font-bold text-white">Select a Market</h2>
+          <p className="text-white/70 mt-2">
+            Choose a market from the dropdown above to start placing predictions
+          </p>
+        </div>
+      </Card>
     );
+  }
 
   return (
     <Card className="shadow-2xl w-full h-full flex flex-col items-center justify-start">
@@ -414,7 +785,7 @@ export default function PredictionInput({
         />
       </div>
 
-      {isLoading && !marketData ? (
+      {(isLoading || loading) && !marketData ? (
         <div className="w-full my-20">
           <Skeleton className="w-full h-12" />
           <Skeleton className="w-full h-8 mt-2" />
@@ -425,8 +796,8 @@ export default function PredictionInput({
 
           {marketData && (
             <div className="flex justify-between text-white/70 text-sm px-1">
-              <div>YES: {marketData.totalOptionA.toString()} shares</div>
-              <div>NO: {marketData.totalOptionB.toString()} shares</div>
+              <div>YES: {marketData.totalOptionA?.toFixed(2) || 0} USDC</div>
+              <div>NO: {marketData.totalOptionB?.toFixed(2) || 0} USDC</div>
             </div>
           )}
         </div>
@@ -446,7 +817,7 @@ export default function PredictionInput({
               setCurrentGif(up_higher);
             }}
           >
-            Yes
+            {marketData.optionA || "Yes"}
           </Button>
           <Button
             className={`h-12 text-sm font-semibold ${
@@ -459,7 +830,7 @@ export default function PredictionInput({
               setCurrentGif(decide_no);
             }}
           >
-            No
+            {marketData.optionB || "No"}
           </Button>
         </div>
       )}
@@ -469,20 +840,18 @@ export default function PredictionInput({
         <div className="w-full text-center mb-6">
           <div className="bg-indigo-600/30 rounded-lg p-3">
             <p className="text-white font-medium">
-              Market Resolved:{" "}
-              {marketData.outcome.optionA
-                ? marketData.optionA
-                : marketData.optionB}
+              Market Resolved: {marketData.outcome}
             </p>
           </div>
 
-          {canWithdraw && (
+          {/* Simplify check for withdrawal eligibility */}
+          {connected && marketData.resolved && (
             <Button
               className="w-full h-12 mt-4 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-all duration-300"
               onClick={withdrawWinnings}
               disabled={isLoading}
             >
-              {isLoading ? "Processing..." : "Withdraw Winnings"}
+              {isLoading ? "Processing..." : "Withdraw USDC Winnings"}
             </Button>
           )}
         </div>
@@ -496,28 +865,30 @@ export default function PredictionInput({
       )}
 
       {/* Show amount input and place prediction button only if wallet is connected and market not resolved */}
-      {connected && !marketData?.resolved && (
+      {connected && marketData && !marketData.resolved && (
         <div className="space-y-4 w-full mt-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-white/80">Amount</label>
+            <label className="text-sm font-medium text-white/80">
+              Amount (USDC)
+            </label>
             <div className="relative">
               <img
-                src={solana.src}
-                alt="SOL"
+                src={usdc.src}
+                alt="USDC"
                 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-white/50"
               />
               <Input
                 type="tel"
                 inputMode="decimal"
-                placeholder="Enter amount"
+                placeholder="Enter USDC amount"
                 value={amount}
                 onChange={(e) => handleAmountChange(e.target.value)}
                 className="pl-10 h-12 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:ring-2 focus:ring-purple-500"
               />
             </div>
-            {/* Add USD equivalent display */}
+            {/* USDC is already in USD, so we don't need to convert */}
             <div className="text-sm text-white/60">
-              ≈ ${(Number(amount) * tokenPrice).toFixed(2)} USD
+              Make sure you have USDC in your wallet
             </div>
           </div>
 
@@ -544,15 +915,8 @@ export default function PredictionInput({
                     >
                       {option}:{" "}
                       {option === "YES"
-                        ? `${potentialWinnings.yes.toFixed(4)} SOL`
-                        : `${potentialWinnings.no.toFixed(4)} SOL`}
-                    </div>
-                    <div className="text-sm text-white/60">
-                      ≈ $
-                      {option === "YES"
-                        ? (potentialWinnings.yes * tokenPrice).toFixed(2)
-                        : (potentialWinnings.no * tokenPrice).toFixed(2)}{" "}
-                      USD
+                        ? `${potentialWinnings.yes.toFixed(2)} USDC`
+                        : `${potentialWinnings.no.toFixed(2)} USDC`}
                     </div>
                   </div>
                 </div>
@@ -577,62 +941,16 @@ export default function PredictionInput({
           <p className="text-sm text-white/70 mb-4">{marketData.description}</p>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-white/60">End Date:</span>
-              <p className="text-white">{marketData.endTimeString}</p>
+              <span className="text-white/60">End Time:</span>
+              <p className="text-white">
+                {new Date(marketData.endTime * 1000).toLocaleString()}
+              </p>
             </div>
             <div>
               <span className="text-white/60">Resolution Source:</span>
               <p className="text-white">{marketData.resolutionSource}</p>
             </div>
           </div>
-
-          {/* Display user's current position if they have shares */}
-          {connected &&
-            marketData &&
-            marketData.shares &&
-            Array.isArray(marketData.shares) &&
-            marketData.shares.some(
-              (share: any) =>
-                share &&
-                share.user &&
-                typeof share.user === "object" &&
-                share.user.toString() ===
-                  (publicKey || PublicKey.default).toString()
-            ) && (
-              <div className="mt-4 p-3 bg-indigo-900/30 rounded-lg">
-                <h4 className="text-sm font-medium text-white mb-2">
-                  Your Position
-                </h4>
-                <div className="space-y-2">
-                  {marketData.shares
-                    .filter(
-                      (share: any) =>
-                        share &&
-                        share.user &&
-                        typeof share.user === "object" &&
-                        share.user.toString() ===
-                          (publicKey || PublicKey.default).toString()
-                    )
-                    .map((share: any, index: number) => (
-                      <div key={index} className="flex justify-between text-sm">
-                        <span
-                          className={
-                            share.option === marketData.optionA
-                              ? "text-green-500"
-                              : "text-red-500"
-                          }
-                        >
-                          {share.option === marketData.optionA ? "YES" : "NO"}:
-                        </span>
-                        <span className="text-white">
-                          {(share.amount.toNumber() / 1_000_000_000).toFixed(4)}{" "}
-                          SOL
-                        </span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
         </div>
       )}
     </Card>

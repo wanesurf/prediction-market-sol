@@ -1,9 +1,9 @@
 import { Idl } from "@project-serum/anchor";
+import { PublicKey } from "@solana/web3.js";
 
-export interface MarketInfoProps {
-  marketId?: string;
-  marketAddress?: string;
-  marketsMapping?: Record<string, string>; // Optional mapping of market IDs to addresses
+export interface MarketInfo {
+  id: string;
+  address: PublicKey;
 }
 
 export interface MarketData {
@@ -21,6 +21,26 @@ export interface MarketData {
   resolutionSource: string;
   totalOptionA?: number;
   totalOptionB?: number;
+  shares?: any[]; // Type can be defined more specifically based on actual data structure
+  buyToken?: PublicKey;
+  authority?: PublicKey;
+  endTimeString?: string;
+}
+
+// For the MarketSelector component
+export interface MarketSelectorProps {
+  onMarketSelect: (marketId: string) => void;
+  selectedMarketId: string;
+  marketsList?: MarketInfo[];
+  loading?: boolean;
+  error?: string | null;
+}
+
+// For the MarketInfo component
+export interface MarketInfoProps {
+  marketId?: string;
+  marketAddress?: string;
+  marketsMapping?: Record<string, string>;
 }
 
 // Manual IDL definition to avoid issues with the imported one

@@ -50,13 +50,13 @@ async function main() {
   console.log("Token B mint:", tokenBMint.publicKey.toString());
   
   // Market parameters
-  const marketId = "solcast-market-1";
+  const marketId = "solcast-market-2";
   const options = ["Yes", "No"];
   const endTime = Math.floor(Date.now() / 1000) + 86400 * 7; // 7 days from now
-  const buyToken = new PublicKey("So11111111111111111111111111111111111111112"); // SOL token
+  const buyToken = new PublicKey("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"); // SOL token
   const bannerUrl = "https://example.com/banner.jpg";
   const description = "First Solcast prediction market";
-  const title = "Will Solana reach $200 by the end of 2024?";
+  const title = "(2)Will Solana reach $200 by the end of 2024?";
   const endTimeString = new Date(endTime * 1000).toISOString();
   const startTimeString = new Date().toISOString();
   const resolutionSource = "https://coingecko.com/en/coins/solana";
