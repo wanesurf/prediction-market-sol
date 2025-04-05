@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@radix-ui/themes/styles.css";
 import { Theme } from "@radix-ui/themes";
-
+import AppWalletProvider from "@/components/AppWalletProvider";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -29,7 +29,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Theme>{children}</Theme>
+        <Theme
+          grayColor="mauve"
+          accentColor="indigo"
+          radius="large"
+          scaling="100%"
+          appearance="dark"
+          panelBackground="translucent"
+        >
+          <AppWalletProvider>{children}</AppWalletProvider>
+        </Theme>
       </body>
     </html>
   );
