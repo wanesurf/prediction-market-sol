@@ -1,6 +1,10 @@
-# Solcast Prediction Market
+# <img src="./Solcast.png" alt="Solcast Logo" width="100" style="vertical-align: middle;"> Solcast Markets
 
 A decentralized prediction market platform built on Solana blockchain that enables users to create, participate in, and trade on prediction markets.
+
+Link to the website: https://prediction-market-sol.vercel.app/
+
+![Website](./website.png)
 
 ## Table of Contents
 
@@ -19,9 +23,15 @@ A decentralized prediction market platform built on Solana blockchain that enabl
 - View market statistics and trends
 - Withdraw winnings when markets are resolved
 - Secure fund management through Program Derived Addresses (PDAs)
-- Automated market resolution
+- Automated market resolution (not implemented)
 
-## Getting Started
+## Built with love using
+
+- [Next.js](https://nextjs.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Anchor](https://anchor-lang.com/)
+- [Solana](https://solana.com/)
+- [Vercel](https://vercel.com/)
 
 ### Prerequisites
 
@@ -174,6 +184,12 @@ The present sequence diagram shows the flow developed during the hackathon.
 This is the sequence diagram of the future, improved flow. Ideally users should reveive actual shares in the form of Tokens (SPL). This is more aligned with the real world, where users can trade shares on other platforms before the market is resolved.
 
 ![Future](./sequence_future.png)
+
+## Responsivness
+
+The website is responsive and works on all devices.
+
+![Responsivness](./responsive.jpeg)
 
 ## License
 
