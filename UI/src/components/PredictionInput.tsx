@@ -1,33 +1,29 @@
-//@ts-nocheck
-// "use client";
 import React from "react";
 
 import up_higher from "../assets/up_higher.gif";
 import decide_no from "../assets/decide_no.gif";
 import make_decision from "../assets/make_decision.gif";
-import usdc from "../assets/usdc.svg";
+import solana from "../assets/solana-sol-logo.svg";
 
 import { useEffect, useState, useCallback } from "react";
 import { Card, Skeleton } from "@radix-ui/themes";
 import { VoteBar } from "./VoteBar";
 import { Input } from "./Input";
 import { Button } from "./Button";
-import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import {
+  useWallet,
+  useConnection,
+  useAnchorWallet,
+} from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { PublicKey, Transaction } from "@solana/web3.js";
+import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
 import { AnchorProvider, Program, BN, web3 } from "@coral-xyz/anchor";
 import { notify } from "../lib/notifications";
-import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { MarketData, idl } from "../lib/types";
-
+import { MarketData } from "../lib/types";
+import { idl } from "../lib/types";
 // Constants
 const SOLCAST_PROGRAM_ID = new PublicKey(
-  "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
-);
-
-// Devnet USDC address
-const DEVNET_USDC = new PublicKey(
-  "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+  "7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ"
 );
 
 export default function PredictionInput({
@@ -45,7 +41,7 @@ export default function PredictionInput({
   const [currentGif, setCurrentGif] = useState(make_decision);
   const [amount, setAmount] = useState("");
   const [showEstimatedWinnings, setShowEstimatedWinnings] = useState(false);
-  const [option, setOption] = useState<"YES" | "NO">("YES");
+  const [option, setOption] = useState<"Yes" | "No">("Yes");
   const [isLoading, setIsLoading] = useState(false);
   const [odds, setOdds] = useState<{ oddsA: number; oddsB: number }>({
     oddsA: 0,
@@ -58,6 +54,7 @@ export default function PredictionInput({
 
   const { publicKey, connected, sendTransaction } = useWallet();
   const { connection } = useConnection();
+  const wallet = useWallet();
 
   // Calculate odds when market data changes
   useEffect(() => {
@@ -65,14 +62,11 @@ export default function PredictionInput({
       const totalA = marketData.totalOptionA || 0;
       const totalB = marketData.totalOptionB || 0;
 
-      console.log("Calculating odds with totalA:", totalA, "totalB:", totalB);
-
       const calculatedOdds = {
         oddsA: totalB > 0 && totalA > 0 ? totalB / totalA : 0,
         oddsB: totalA > 0 && totalB > 0 ? totalA / totalB : 0,
       };
 
-      console.log("Calculated odds:", calculatedOdds);
       setOdds(calculatedOdds);
 
       // Update potential winnings if amount is set
@@ -82,47 +76,36 @@ export default function PredictionInput({
     }
   }, [marketData, amount]);
 
-  // Initialize Solcast program
-  const getProgram = useCallback(async () => {
-    if (!connection || !publicKey) return null;
-
-    try {
-      const provider = new AnchorProvider(
-        connection,
-        {
-          publicKey: publicKey,
-          signTransaction: async (tx) => tx,
-          signAllTransactions: async (txs) => txs,
-        },
-        { commitment: "confirmed" }
-      );
-
-      // Create program instance using the imported IDL
-      return new Program(idl, SOLCAST_PROGRAM_ID, provider);
-    } catch (error) {
-      console.error("Failed to initialize Solcast program:", error);
-      notify({
-        type: "error",
-        message: "Failed to connect to Solcast program",
-      });
-      return null;
-    }
-  }, [connection, publicKey]);
-
   // Fetch market data
   const fetchMarketData = useCallback(async () => {
-    if (!connection || !marketAccount) return;
+    if (!connection || !marketAccount) {
+      console.log(
+        "Cannot fetch market data: connection or marketAccount is missing"
+      );
+      return;
+    }
 
     try {
       setIsLoading(true);
-      const program = await getProgram();
-      if (!program) return;
+      console.log(
+        "Fetching market data for account:",
+        marketAccount.toString()
+      );
 
-      console.log("Fetching market data for:", marketAccount.toString());
+      const provider = new AnchorProvider(connection, wallet, {
+        commitment: "confirmed",
+      });
+
+      const program = new Program(idl, SOLCAST_PROGRAM_ID, provider);
+      if (!program) {
+        console.log("Failed to initialize program");
+        return;
+      }
 
       // Fetch market data
+      console.log("Fetching market account data...");
       const market = await program.account.market.fetch(marketAccount);
-      console.log("Fetched market data:", market);
+      console.log("Market account data fetched successfully:", market);
 
       // Extract relevant data for odds calculation
       const totalA = market.totalOptionA
@@ -132,8 +115,8 @@ export default function PredictionInput({
         ? (market.totalOptionB as any).toNumber()
         : 0;
 
-      console.log("Total for option A:", totalA);
-      console.log("Total for option B:", totalB);
+      console.log("Total option A:", totalA);
+      console.log("Total option B:", totalB);
 
       const calculatedOdds = {
         oddsA: totalB > 0 && totalA > 0 ? totalB / totalA : 0,
@@ -153,7 +136,7 @@ export default function PredictionInput({
     } finally {
       setIsLoading(false);
     }
-  }, [connection, marketAccount, amount, getProgram]);
+  }, [connection, marketAccount, amount]);
 
   // Calculate potential winnings
   const calculatePotentialWinnings = (
@@ -176,414 +159,216 @@ export default function PredictionInput({
     const noWinnings =
       amountValue + amountValue * currentOdds.oddsB * (1 - COMMISSION_RATE);
 
-    console.log("Potential winnings calculated:", {
-      yes: yesWinnings,
-      no: noWinnings,
-    });
     setPotentialWinnings({
       yes: yesWinnings,
       no: noWinnings,
     });
   };
 
-  // Updated buyShares function that explicitly names accounts according to the IDL
-
-  // Final fixed version of buyShares function using the correct account structure
-
-  // Try this modified version of the buyShares function
   const buyShares = async () => {
-    if (!publicKey || !connected || !marketData) {
+    // Initial validation checks
+    if (!publicKey || !connected) {
       notify({ type: "error", message: "Please connect your wallet first" });
       return;
     }
 
-    if (!marketAccount) {
-      notify({ type: "error", message: "No market selected" });
+    if (!marketAccount || !(marketAccount instanceof PublicKey)) {
+      notify({ type: "error", message: "Invalid market account" });
       return;
     }
 
-    if (!amount || parseFloat(amount) <= 0) {
+    if (!marketData) {
+      notify({ type: "error", message: "Market data not available" });
+      return;
+    }
+
+    // Validate market ID and options
+    if (!marketData.id || typeof marketData.id !== "string") {
+      notify({ type: "error", message: "Invalid market ID" });
+      return;
+    }
+
+    if (
+      !marketData.optionA ||
+      typeof marketData.optionA !== "string" ||
+      !marketData.optionB ||
+      typeof marketData.optionB !== "string"
+    ) {
+      notify({ type: "error", message: "Invalid market options" });
+      return;
+    }
+
+    // Validate option and amount
+    if (option !== "Yes" && option !== "No") {
+      notify({ type: "error", message: "Invalid option selected" });
+      return;
+    }
+
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       notify({ type: "error", message: "Please enter a valid amount" });
       return;
     }
 
+    // Create a custom wallet adapter to fix the type issue
+    const walletAdapter = {
+      publicKey: wallet.publicKey || PublicKey.default,
+      signTransaction: wallet.signTransaction || (() => Promise.reject()),
+      signAllTransactions:
+        wallet.signAllTransactions || (() => Promise.reject()),
+    };
+
+    const provider = new AnchorProvider(connection, walletAdapter, {
+      commitment: "confirmed",
+    });
+
     try {
       setIsLoading(true);
-      const program = await getProgram();
-      if (!program) return;
+      const program = new Program(idl, SOLCAST_PROGRAM_ID, provider);
+      if (!program) {
+        notify({ type: "error", message: "Failed to initialize program" });
+        return;
+      }
 
-      console.log("Buying shares in market:", marketAccount.toString());
-      console.log("Option:", option);
-      console.log("Amount:", amount);
+      // Convert amount to lamports (SOL * 10^9)
+      const amountLamports = Math.floor(parseFloat(amount) * 1_000_000_000);
 
-      // Convert amount to USDC units (6 decimals)
-      const amountInUsdc = Math.floor(parseFloat(amount) * 1_000_000);
-
-      // Import required libraries
-      const {
-        createAssociatedTokenAccountInstruction,
-        getAssociatedTokenAddress,
-        TOKEN_PROGRAM_ID,
-      } = await import("@solana/spl-token");
-
-      const { TransactionInstruction, SystemProgram } = await import(
-        "@solana/web3.js"
-      );
-
-      // Fetch the full market account data
+      // Fetch the market account data to get the correct market ID
       const marketAccountData = await program.account.market.fetch(
         marketAccount
       );
-      console.log("Fetched market data:", marketAccountData);
+      const marketId = marketAccountData.id as string;
+
+      // Get the market authority PDA
+      const [marketAuthority, bump] = PublicKey.findProgramAddressSync(
+        [Buffer.from("market_authority"), Buffer.from(marketId as string)],
+        program.programId
+      );
+
+      // Detailed logging of market account data
+      console.log("Market Account Data:", {
+        id: marketId,
+        authority: marketAuthority.toString(),
+        authorityBump: bump,
+        optionA: marketAccountData.optionA,
+        optionB: marketAccountData.optionB,
+        marketAuthority: marketAccountData.authority?.toString(),
+        isMatchingAuthority: marketAuthority.equals(
+          marketAccountData.authority
+        ),
+      });
 
       // Determine which option the user is selecting
       const selectedOption =
-        option === "YES" ? marketData.optionA : marketData.optionB;
-      console.log("Selected option:", selectedOption);
+        option === "Yes" ? marketData.optionA : marketData.optionB;
 
-      // Get market data
-      const marketId = marketAccountData.id;
-      // Use type assertions to handle the unknown types
-      const tokenAMint = new PublicKey(
-        (marketAccountData.tokenAMint as any).toString()
+      // Additional debug: Check if the option values match exactly
+      console.log("Option comparison:", {
+        selectedOption,
+        marketOptionA: marketData.optionA,
+        marketOptionB: marketData.optionB,
+        contractOptionA: marketAccountData.optionA,
+        contractOptionB: marketAccountData.optionB,
+        // Check for exact matches
+        optionAMatch: marketData.optionA === marketAccountData.optionA,
+        optionBMatch: marketData.optionB === marketAccountData.optionB,
+      });
+
+      // Explicit system program ID
+      const SYSTEM_PROGRAM_ID = new PublicKey(
+        "11111111111111111111111111111111"
       );
-      const tokenBMint = new PublicKey(
-        (marketAccountData.tokenBMint as any).toString()
-      );
-      const marketAuthority = new PublicKey(
-        (marketAccountData.authority as any).toString()
-      );
 
-      console.log("Market ID:", marketId);
-      console.log("Market authority:", marketAuthority.toString());
-      console.log("Token A mint:", tokenAMint.toString());
-      console.log("Token B mint:", tokenBMint.toString());
+      // Comprehensive logging of transaction details
+      console.log("Transaction Preparation Details:", {
+        marketId,
+        selectedOption,
+        amountLamports,
+        marketAccount: marketAccount.toString(),
+        publicKey: publicKey.toString(),
+        systemProgramId: SYSTEM_PROGRAM_ID.toString(),
+        marketAuthority: marketAuthority.toString(),
+      });
 
-      // Use USDC as payment token
-      const buyToken = DEVNET_USDC;
-      console.log("Buy token (USDC):", buyToken.toString());
+      // Create the transaction
+      const ix = await program.methods
+        .buyShare(marketId, selectedOption, new BN(amountLamports))
+        .accounts({
+          market: marketAccount,
+          user: publicKey,
+          marketAuthority: marketAuthority,
+          systemProgram: SYSTEM_PROGRAM_ID,
+        })
+        .instruction();
 
-      // Get associated token accounts
-      const userTokenAccount = await getAssociatedTokenAddress(
-        buyToken,
-        publicKey
-      );
-      console.log("User token account:", userTokenAccount.toString());
+      const transaction = new Transaction().add(ix);
 
-      // Check if user has enough USDC
       try {
-        const userTokenInfo = await connection.getTokenAccountBalance(
-          userTokenAccount
-        );
-        console.log("User USDC balance:", userTokenInfo.value.uiAmount);
+        const signature = await sendTransaction(transaction, connection);
+        console.log("Transaction successful:", signature);
 
-        if ((userTokenInfo.value.uiAmount || 0) < parseFloat(amount)) {
-          notify({
-            type: "error",
-            message: `Not enough USDC. You have ${userTokenInfo.value.uiAmount} USDC but need ${amount} USDC.`,
-          });
-          setIsLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.error("Error checking USDC balance:", err);
-        notify({
-          type: "error",
-          message:
-            "You don't have a USDC token account. Please get some Devnet USDC first.",
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      const marketTokenAccount = await getAssociatedTokenAddress(
-        buyToken,
-        marketAuthority,
-        true // Allow off-curve
-      );
-      console.log("Market token account:", marketTokenAccount.toString());
-
-      // Check if market token account exists
-      const marketTokenInfo = await connection.getAccountInfo(
-        marketTokenAccount
-      );
-      if (!marketTokenInfo) {
-        console.log("Market token account doesn't exist. Creating it...");
-        notify({
-          type: "info",
-          message:
-            "Setting up market token account. This is a one-time operation.",
-        });
-
-        // Create the market token account
-        try {
-          // Create instruction to make the associated token account
-          const createAccountIx = createAssociatedTokenAccountInstruction(
-            publicKey, // payer
-            marketTokenAccount, // associated token account address
-            marketAuthority, // owner
-            buyToken // mint
-          );
-
-          // Create a new transaction
-          const transaction = new Transaction();
-          transaction.add(createAccountIx);
-
-          // Get a fresh blockhash
-          const latestBlockhash = await connection.getLatestBlockhash();
-          transaction.recentBlockhash = latestBlockhash.blockhash;
-          transaction.lastValidBlockHeight =
-            latestBlockhash.lastValidBlockHeight;
-          transaction.feePayer = publicKey;
-
-          // Send the transaction to the wallet for signing
-          console.log("Sending transaction to create market token account...");
-          const signature = await sendTransaction(transaction, connection);
-          console.log("Transaction sent with signature:", signature);
-
-          // Wait for confirmation
-          await connection.confirmTransaction(
-            {
-              signature,
-              blockhash: latestBlockhash.blockhash,
-              lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-            },
-            "confirmed"
-          );
-
-          console.log("Market token account created successfully!");
-          notify({
-            type: "success",
-            message: "Market token account created successfully!",
-            txid: signature,
-          });
-        } catch (err) {
-          console.error("Error creating market token account:", err);
-          notify({
-            type: "error",
-            message: `Failed to create market token account: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          });
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Get the option mint based on user selection
-      const optionMint = option === "YES" ? tokenAMint : tokenBMint;
-
-      // Get the user's option token account
-      const userOptionTokenAccount = await getAssociatedTokenAddress(
-        optionMint,
-        publicKey
-      );
-      console.log(
-        "User option token account:",
-        userOptionTokenAccount.toString()
-      );
-
-      // Create a new transaction
-      const transaction = new Transaction();
-
-      // Check if the user's option token account exists and create if needed
-      const optionAccountInfo = await connection.getAccountInfo(
-        userOptionTokenAccount
-      );
-      if (!optionAccountInfo) {
-        console.log("Creating option token account for user");
-
-        // Create instruction to make the associated token account
-        const createAccountIx = createAssociatedTokenAccountInstruction(
-          publicKey, // payer
-          userOptionTokenAccount, // associated token account address
-          publicKey, // owner
-          optionMint // mint
-        );
-
-        // Add instruction to transaction
-        transaction.add(createAccountIx);
-      } else {
-        console.log("Option token account already exists");
-      }
-
-      // Create the instruction data
-      console.log("Encoding instruction data...");
-      try {
-        // Log the program's IDL for debugging
-        console.log(
-          "Program IDL:",
-          program.idl.instructions.find((i) => i.name === "buyShare")
-        );
-
-        // Encode the data
-        const data = program.coder.instruction.encode("buy_share", {
-          marketId,
-          option: selectedOption,
-          amount: new BN(amountInUsdc),
-        });
-        console.log("Instruction data encoded successfully");
-
-        // Create the transaction instruction keys in the exact order expected by the program
-        const keys = [
-          { pubkey: marketAccount, isSigner: false, isWritable: true },
-          { pubkey: publicKey, isSigner: true, isWritable: true },
-          { pubkey: marketAuthority, isSigner: false, isWritable: false },
-          { pubkey: userTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: marketTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: userOptionTokenAccount, isSigner: false, isWritable: true },
-          { pubkey: tokenAMint, isSigner: false, isWritable: true },
-          { pubkey: tokenBMint, isSigner: false, isWritable: true },
-          { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
-        ];
-
-        // Create the instruction manually
-        const buyShareIx = new TransactionInstruction({
-          programId: SOLCAST_PROGRAM_ID,
-          keys: keys as any,
-          data,
-        });
-
-        // Add the buy share instruction to the transaction
-        transaction.add(buyShareIx);
-      } catch (err) {
-        console.error("Error creating instruction:", err);
-        notify({
-          type: "error",
-          message: `Error creating transaction: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      // Get a fresh blockhash
-      const latestBlockhash = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = latestBlockhash.blockhash;
-      transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
-      transaction.feePayer = publicKey;
-
-      // Log the created transaction for debugging
-      console.log(
-        "Transaction created with instructions:",
-        transaction.instructions.length
-      );
-      console.log("Transaction blockhash:", latestBlockhash.blockhash);
-
-      // Simulate the transaction before sending
-      console.log("Simulating transaction...");
-      try {
-        const simulation = await connection.simulateTransaction(transaction);
-        console.log("Transaction simulation result:", simulation);
-
-        if (simulation.value.err) {
-          throw new Error(
-            `Transaction simulation failed: ${JSON.stringify(
-              simulation.value.err
-            )}`
-          );
-        }
-      } catch (err) {
-        console.error("Transaction simulation error:", err);
-        // Continue anyway, as some errors only appear during actual execution
-      }
-
-      // Send the transaction to the wallet for signing
-      console.log("Sending transaction to wallet for signing...");
-      try {
-        const signature = await sendTransaction(transaction, connection, {
-          skipPreflight: false,
-          preflightCommitment: "confirmed",
-          maxRetries: 5,
-        });
-        console.log("Transaction signed and sent with signature:", signature);
-
-        // Notify user that transaction is processing
-        notify({
-          type: "info",
-          message: "Transaction sent! Waiting for confirmation...",
-          txid: signature,
-        });
-
-        // Wait for confirmation
-        const confirmationStatus = await connection.confirmTransaction(
-          {
-            signature,
-            blockhash: latestBlockhash.blockhash,
-            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-          },
-          "confirmed"
-        );
-
-        console.log("Confirmation status:", confirmationStatus);
-
-        if (confirmationStatus.value.err) {
-          throw new Error(
-            `Transaction confirmed with error: ${JSON.stringify(
-              confirmationStatus.value.err
-            )}`
-          );
-        }
-
-        console.log("Transaction confirmed successfully!");
-
+        // Notify user of successful transaction
         notify({
           type: "success",
-          message: `Successfully placed ${option} prediction of ${amount} USDC!`,
+          message: `Successfully placed ${option} prediction of ${amount} SOL!`,
           txid: signature,
         });
 
         // Refresh market data
         fetchMarketData();
+      } catch (error: any) {
+        console.error("Transaction error details:", error);
 
-        // Reset amount
-        setAmount("");
-      } catch (err) {
-        console.error("Error during transaction sending or confirmation:", err);
-        let errorMessage = "Transaction failed";
+        // More detailed error handling with stringified error
+        console.error("Full error object:", JSON.stringify(error, null, 2));
 
-        if (err instanceof Error) {
-          errorMessage += `: ${err.message}`;
-
-          // Check for common error patterns
-          if (err.message.includes("not enough SOL")) {
-            errorMessage = "Not enough SOL to pay for transaction fees";
-          } else if (err.message.includes("insufficient funds")) {
-            errorMessage = "Insufficient funds for this transaction";
-          } else if (err.message.includes("user rejected")) {
-            errorMessage = "Transaction was rejected by the wallet";
-          }
+        // Check for specific error types
+        if (error.message && error.message.includes("InvalidMarketAuthority")) {
+          notify({
+            type: "error",
+            message:
+              "Invalid market authority. Please try again or contact support.",
+          });
+        } else if (error.message && error.message.includes("InvalidOption")) {
+          notify({
+            type: "error",
+            message: "Invalid option selected. Please try again.",
+          });
+        } else {
+          notify({
+            type: "error",
+            message: `Transaction failed: ${error.message || "Unknown error"}`,
+          });
         }
-
-        notify({
-          type: "error",
-          message: errorMessage,
-        });
       }
     } catch (error) {
-      console.error("Failed to place prediction:", error);
+      // Comprehensive error logging
+      console.error("Full buy shares error:", error);
 
-      // More detailed error logging
-      let errorMessage = "Failed to place prediction";
       if (error instanceof Error) {
-        errorMessage += `: ${error.message}`;
-        console.log("Full error object:", error);
-
-        // Additional error information for debugging
-        if ((error as any).logs) {
-          console.log("Transaction logs:", (error as any).logs);
-        }
+        console.error("Error name:", error.name);
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
       }
 
+      // Provide user-friendly error notification
       notify({
         type: "error",
-        message: errorMessage,
+        message: `Failed to place prediction: ${
+          error instanceof Error ? error.message : JSON.stringify(error)
+        }`,
       });
     } finally {
+      // Ensure loading state is reset
       setIsLoading(false);
     }
   };
+
+  // Update the option selection handlers
+  const handleOptionSelect = (selectedOption: "Yes" | "No") => {
+    setOption(selectedOption);
+    setCurrentGif(selectedOption === "Yes" ? up_higher : decide_no);
+  };
+
   // Withdraw winnings
   const withdrawWinnings = async () => {
     if (!publicKey || !connected || !marketData) {
@@ -604,55 +389,53 @@ export default function PredictionInput({
 
     try {
       setIsLoading(true);
-      const program = await getProgram();
+
+      // Create a custom wallet adapter to fix the type issue
+      const walletAdapter = {
+        publicKey: wallet.publicKey || PublicKey.default,
+        signTransaction: wallet.signTransaction || (() => Promise.reject()),
+        signAllTransactions:
+          wallet.signAllTransactions || (() => Promise.reject()),
+      };
+
+      // Create a provider
+      const provider = new AnchorProvider(connection, walletAdapter, {
+        commitment: "confirmed",
+      });
+
+      const program = new Program(idl, SOLCAST_PROGRAM_ID, provider);
       if (!program) return;
 
-      console.log(
-        "Withdrawing winnings from market:",
-        marketAccount.toString()
-      );
-
-      // Fetch the full market account data
+      // Fetch the market account data to get the market authority
       const marketAccountData = await program.account.market.fetch(
         marketAccount
       );
 
-      // Get the market ID and authority directly from the account data
-      const marketId = marketAccountData.id;
-      const marketAuthority = new PublicKey(
-        (marketAccountData.authority as any).toString()
+      // Get the market authority PDA
+      const [marketAuthority, bump] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("market_authority"),
+          Buffer.from(marketAccountData.id as string),
+        ],
+        program.programId
       );
-      console.log("Market ID:", marketId);
-      console.log("Market authority:", marketAuthority.toString());
 
-      // Use USDC as the payment token
-      const buyToken = DEVNET_USDC;
-
-      // Get associated token accounts
-      const userTokenAccount = await getAssociatedTokenAddress(
-        buyToken,
-        publicKey
-      );
-      console.log("User token account:", userTokenAccount.toString());
-
-      const marketTokenAccount = await getAssociatedTokenAddress(
-        buyToken,
-        marketAuthority,
-        true // Allow off-curve
-      );
-      console.log("Market token account:", marketTokenAccount.toString());
+      // Log the market authority for debugging
+      console.log("Withdraw - Market Authority:", {
+        id: marketAccountData.id,
+        authority: marketAuthority.toString(),
+        authorityBump: bump,
+        marketAuthority: marketAccountData.authority?.toString(),
+      });
 
       // Create the transaction
-      console.log("Creating withdraw instruction...");
       const ix = await program.methods
-        .withdraw(marketId)
+        .withdraw(marketAccountData.id)
         .accounts({
           market: marketAccount,
           user: publicKey,
           marketAuthority: marketAuthority,
-          userTokenAccount: userTokenAccount,
-          marketTokenAccount: marketTokenAccount,
-          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
         })
         .instruction();
 
@@ -662,54 +445,76 @@ export default function PredictionInput({
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
 
-      console.log("Sending transaction...");
-      const signature = await sendTransaction(transaction, connection);
-      console.log("Transaction sent with signature:", signature);
+      try {
+        const signature = await sendTransaction(transaction, connection);
+        await connection.confirmTransaction(signature, "confirmed");
 
-      await connection.confirmTransaction(signature, "confirmed");
-      console.log("Transaction confirmed!");
+        notify({
+          type: "success",
+          message: "Successfully withdrew SOL winnings!",
+          txid: signature,
+        });
 
-      notify({
-        type: "success",
-        message: "Successfully withdrew USDC winnings!",
-        txid: signature,
-      });
+        // Refresh market data
+        fetchMarketData();
+      } catch (error: any) {
+        console.error("Withdraw transaction error details:", error);
 
-      // Refresh market data
-      fetchMarketData();
-    } catch (error) {
-      console.error("Failed to withdraw:", error);
-      let errorMessage = "Failed to withdraw winnings";
-      if (error instanceof Error) {
-        errorMessage += `: ${error.message}`;
+        // Check for specific error types
+        if (error.message && error.message.includes("InvalidMarketAuthority")) {
+          notify({
+            type: "error",
+            message:
+              "Invalid market authority. Please try again or contact support.",
+          });
+        } else if (error.message && error.message.includes("NoWinningShares")) {
+          notify({
+            type: "error",
+            message: "You don't have any winning shares for this market.",
+          });
+        } else if (
+          error.message &&
+          error.message.includes("AlreadyWithdrawn")
+        ) {
+          notify({
+            type: "error",
+            message: "You've already withdrawn your winnings from this market.",
+          });
+        } else {
+          notify({
+            type: "error",
+            message: `Withdrawal failed: ${error.message || "Unknown error"}`,
+          });
+        }
       }
+    } catch (error: any) {
+      console.error("Failed to withdraw:", error);
       notify({
         type: "error",
-        message: errorMessage,
+        message: "Failed to withdraw winnings",
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fetch USDC price
+  // Fetch SOL price
   useEffect(() => {
     const fetchPrice = async () => {
       try {
         const response = await fetch(
-          "https://api.coingecko.com/api/v3/simple/price?ids=usd-coin&vs_currencies=usd"
+          "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
         );
         const data = await response.json();
-        setTokenPrice(data["usd-coin"].usd || 1); // Default to 1 if API fails
+        setTokenPrice(data.solana.usd);
       } catch (error) {
         console.error("Failed to fetch price:", error);
-        setTokenPrice(1); // Default to 1 USD for USDC
+        setTokenPrice(0);
       }
     };
 
     fetchPrice();
-    // USDC is pegged to USD, so we don't need frequent updates
-    const interval = setInterval(fetchPrice, 300000); // Every 5 minutes
+    const interval = setInterval(fetchPrice, 60000); // Refresh every minute
     return () => clearInterval(interval);
   }, []);
 
@@ -718,27 +523,17 @@ export default function PredictionInput({
     if (marketAccount) {
       fetchMarketData();
 
-      // Set up interval to refresh market data
       const interval = setInterval(fetchMarketData, 30000); // Refresh every 30 seconds
       return () => clearInterval(interval);
     }
   }, [fetchMarketData, marketAccount]);
 
-  // Update potential winnings when amount or odds change
-  useEffect(() => {
-    if (amount && !isNaN(Number(amount)) && Number(amount) > 0) {
-      calculatePotentialWinnings(odds, Number(amount));
-    }
-  }, [amount, odds]);
-
   const handleAmountChange = (value: string) => {
     // Only allow numbers and at most one decimal point
     const sanitizedValue = value.replace(/[^\d.]/g, "");
-    // Prevent multiple decimal points
     const parts = sanitizedValue.split(".");
     const cleanValue = parts[0] + (parts.length > 1 ? "." + parts[1] : "");
-    // Remove leading zeros
-    const finalValue = cleanValue.replace(/^0+(?=\d)/, "") || "0"; // Ensure "0" remains if the input is cleared
+    const finalValue = cleanValue.replace(/^0+(?=\d)/, "") || "0";
     setAmount(finalValue);
   };
 
@@ -779,6 +574,7 @@ export default function PredictionInput({
 
       <div className="flex justify-center w-full">
         <img
+          // @ts-ignore
           src={currentGif.src}
           alt="Prediction Market"
           className="rounded-lg w-24 h-24 sm:w-32 sm:h-32"
@@ -796,8 +592,8 @@ export default function PredictionInput({
 
           {marketData && (
             <div className="flex justify-between text-white/70 text-sm px-1">
-              <div>YES: {marketData.totalOptionA?.toFixed(2) || 0} USDC</div>
-              <div>NO: {marketData.totalOptionB?.toFixed(2) || 0} USDC</div>
+              <div>YES: {marketData.totalOptionA?.toFixed(2) || 0} SOL</div>
+              <div>NO: {marketData.totalOptionB?.toFixed(2) || 0} SOL</div>
             </div>
           )}
         </div>
@@ -808,12 +604,12 @@ export default function PredictionInput({
         <div className="grid grid-cols-2 gap-4 w-full">
           <Button
             className={`h-12 text-sm font-semibold ${
-              option === "YES"
+              option === "Yes"
                 ? "bg-green-500 hover:bg-green-600 text-white"
                 : "bg-green-500/20 hover:bg-green-600/30 text-white"
             }`}
             onClick={() => {
-              setOption("YES");
+              setOption("Yes");
               setCurrentGif(up_higher);
             }}
           >
@@ -821,12 +617,12 @@ export default function PredictionInput({
           </Button>
           <Button
             className={`h-12 text-sm font-semibold ${
-              option === "NO"
+              option === "No"
                 ? "bg-red-500 hover:bg-red-600 text-white"
                 : "bg-red-500/20 hover:bg-red-600/30 text-white"
             }`}
             onClick={() => {
-              setOption("NO");
+              setOption("No");
               setCurrentGif(decide_no);
             }}
           >
@@ -844,14 +640,13 @@ export default function PredictionInput({
             </p>
           </div>
 
-          {/* Simplify check for withdrawal eligibility */}
           {connected && marketData.resolved && (
             <Button
               className="w-full h-12 mt-4 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-all duration-300"
               onClick={withdrawWinnings}
               disabled={isLoading}
             >
-              {isLoading ? "Processing..." : "Withdraw USDC Winnings"}
+              {isLoading ? "Processing..." : "Withdraw SOL Winnings"}
             </Button>
           )}
         </div>
@@ -869,26 +664,28 @@ export default function PredictionInput({
         <div className="space-y-4 w-full mt-6">
           <div className="space-y-2">
             <label className="text-sm font-medium text-white/80">
-              Amount (USDC)
+              Amount (SOL)
             </label>
             <div className="relative">
               <img
-                src={usdc.src}
-                alt="USDC"
+                // @ts-ignore
+                src={solana.src}
+                alt="SOL"
                 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-white/50"
               />
               <Input
                 type="tel"
                 inputMode="decimal"
-                placeholder="Enter USDC amount"
+                placeholder="Enter SOL amount"
                 value={amount}
                 onChange={(e) => handleAmountChange(e.target.value)}
                 className="pl-10 h-12 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:ring-2 focus:ring-purple-500"
               />
             </div>
-            {/* USDC is already in USD, so we don't need to convert */}
             <div className="text-sm text-white/60">
-              Make sure you have USDC in your wallet
+              {tokenPrice > 0 && (
+                <>≈ ${(Number(amount) * tokenPrice).toFixed(2)} USD</>
+              )}
             </div>
           </div>
 
@@ -910,14 +707,23 @@ export default function PredictionInput({
                   <div>
                     <div
                       className={`${
-                        option === "YES" ? "text-green-500" : "text-red-500"
+                        option === "Yes" ? "text-green-500" : "text-red-500"
                       } font-semibold`}
                     >
                       {option}:{" "}
-                      {option === "YES"
-                        ? `${potentialWinnings.yes.toFixed(2)} USDC`
-                        : `${potentialWinnings.no.toFixed(2)} USDC`}
+                      {option === "Yes"
+                        ? `${potentialWinnings.yes.toFixed(2)} SOL`
+                        : `${potentialWinnings.no.toFixed(2)} SOL`}
                     </div>
+                    {tokenPrice > 0 && (
+                      <div className="text-sm text-white/60">
+                        ≈ $
+                        {option === "Yes"
+                          ? (potentialWinnings.yes * tokenPrice).toFixed(2)
+                          : (potentialWinnings.no * tokenPrice).toFixed(2)}{" "}
+                        USD
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

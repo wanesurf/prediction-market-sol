@@ -94,7 +94,7 @@ export default function MarketInfo({
         <Flex justify="between" align="center">
           <Box>
             <Text weight="bold">Total Value:</Text>
-            <Text>{marketData.totalValue.toFixed(2)} USDC</Text>
+            <Text>{marketData.totalValue.toFixed(2)} SOL</Text>
           </Box>
           <Box>
             <Text weight="bold">Bettors:</Text>

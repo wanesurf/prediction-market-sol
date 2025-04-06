@@ -37,7 +37,7 @@ export default function MarketSelector({
 
         // Configure the program ID
         const programId = new PublicKey(
-          "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
+          "7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ"
         );
 
         // Create a provider
@@ -75,7 +75,7 @@ export default function MarketSelector({
 
           // Call the function
           const marketInfos = await program.methods
-            .getAllMarkets()
+            .get_all_markets()
             .accounts(accounts)
             .view();
 

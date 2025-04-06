@@ -14,6 +14,8 @@ import { PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { AnchorProvider, Program, BN } from "@coral-xyz/anchor";
 import { idl, MarketData } from "../lib/types";
+import SharesTab from "../components/SharesTab";
+import ActivitiesTab from "../components/ActivitiesTab";
 
 export default function Home() {
   // We'll use the market address as the selectedMarketId now
@@ -38,7 +40,7 @@ export default function Home() {
 
         // Configure the program ID
         const programId = new PublicKey(
-          "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
+          "7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ"
         );
 
         // Create a read-only provider that doesn't require signing
@@ -92,18 +94,19 @@ export default function Home() {
           optionA: marketAccount.optionA as string,
           optionB: marketAccount.optionB as string,
           endTime: (marketAccount.endTime as BN).toNumber(),
-          totalValue: (marketAccount.totalValue as BN).toNumber() / 1e6, // Convert from lamports to USDC
+          totalValue: (marketAccount.totalValue as BN).toNumber() / 1e9, // Convert from lamports to SOL
           numBettors: (marketAccount.numBettors as BN).toNumber(),
           resolved: marketAccount.resolved as boolean,
           outcome: outcomeText,
           bannerUrl: marketAccount.bannerUrl as string,
           resolutionSource: marketAccount.resolutionSource as string,
           totalOptionA: marketAccount.totalOptionA
-            ? (marketAccount.totalOptionA as BN).toNumber() / 1e6
-            : 0, // Convert from lamports to USDC
+            ? (marketAccount.totalOptionA as BN).toNumber() / 1e9
+            : 0, // Convert from lamports to SOL
           totalOptionB: marketAccount.totalOptionB
-            ? (marketAccount.totalOptionB as BN).toNumber() / 1e6
-            : 0, // Convert from lamports to USDC
+            ? (marketAccount.totalOptionB as BN).toNumber() / 1e9
+            : 0, // Convert from lamports to SOL
+          shares: marketAccount.shares || [], // Include the shares data
         };
 
         console.log("Market data formatted:", marketDataFormatted);
@@ -183,8 +186,23 @@ export default function Home() {
               <Tabs.Trigger value="shares">Shares</Tabs.Trigger>
               <Tabs.Trigger value="activity">Activity</Tabs.Trigger>
             </Tabs.List>
+            <Box pt="3">
+              <Tabs.Content value="shares">
+                <SharesTab
+                  marketData={marketData}
+                  loading={loading}
+                  error={error}
+                />
+              </Tabs.Content>
+              <Tabs.Content value="activity">
+                <ActivitiesTab
+                  marketData={marketData}
+                  loading={loading}
+                  error={error}
+                />
+              </Tabs.Content>
+            </Box>
           </Tabs.Root>
-          <Box style={{ height: "200px" }}></Box>
         </Box>
       </Card>
     </div>

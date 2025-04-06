@@ -21,7 +21,7 @@ export function VoteBar({ yesPercentage, noPercentage }: VoteBarProps) {
     <div className="w-full h-4 bg-white/10 rounded-full overflow-hidden relative flex">
       {/* Yes Votes (Left Side) */}
       <div
-        className="h-full bg-corecastPrimary transition-all duration-500 flex items-center justify-start pl-2 text-xs font-bold text-white"
+        className="h-full bg-green-500 transition-all duration-500 flex items-center justify-start pl-2 text-xs font-bold text-white"
         style={{ width: `${yesWidth}%` }}
       >
         {yesWidth > 10 ? `Yes: ${yesWidth.toFixed(1)}%` : ""}
@@ -29,7 +29,7 @@ export function VoteBar({ yesPercentage, noPercentage }: VoteBarProps) {
 
       {/* No Votes (Right Side) */}
       <div
-        className="h-full bg-corecastSecondary transition-all duration-500 flex items-center justify-end pr-2 text-xs font-bold text-white"
+        className="h-full bg-red-500 transition-all duration-500 flex items-center justify-end pr-2 text-xs font-bold text-white"
         style={{ width: `${noWidth}%` }}
       >
         {noWidth > 10 ? `No: ${noWidth.toFixed(1)}%` : ""}
