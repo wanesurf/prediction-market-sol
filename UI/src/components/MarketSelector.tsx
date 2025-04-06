@@ -297,8 +297,8 @@ export default function MarketSelector({
   if (loading) {
     return (
       <Card size="2">
-        <Flex direction="column" gap="3" p="4">
-          <Text>Loading markets...</Text>
+        <Flex direction="column" gap="3" p={{ initial: "3", sm: "4" }}>
+          <Text size={{ initial: "1", sm: "2" }}>Loading markets...</Text>
         </Flex>
       </Card>
     );
@@ -307,8 +307,10 @@ export default function MarketSelector({
   if (error) {
     return (
       <Card size="2">
-        <Flex direction="column" gap="3" p="4">
-          <Text color="red">{error}</Text>
+        <Flex direction="column" gap="3" p={{ initial: "3", sm: "4" }}>
+          <Text size={{ initial: "1", sm: "2" }} color="red">
+            {error}
+          </Text>
         </Flex>
       </Card>
     );
@@ -317,8 +319,8 @@ export default function MarketSelector({
   if (markets.length === 0) {
     return (
       <Card size="2">
-        <Flex direction="column" gap="3" p="4">
-          <Text>No markets available</Text>
+        <Flex direction="column" gap="3" p={{ initial: "3", sm: "4" }}>
+          <Text size={{ initial: "1", sm: "2" }}>No markets available</Text>
         </Flex>
       </Card>
     );
@@ -326,14 +328,19 @@ export default function MarketSelector({
 
   return (
     <Card size="2">
-      <Flex direction="column" gap="3" p="4">
-        <Text weight="bold">Select Market</Text>
+      <Flex direction="column" gap="3" p={{ initial: "3", sm: "4" }}>
+        <Text size={{ initial: "2", sm: "3" }} weight="bold">
+          Select Market
+        </Text>
         <Select.Root
           value={selectedMarketId}
           onValueChange={onMarketSelect}
           defaultValue={markets[0]?.address.toString()}
         >
-          <Select.Trigger placeholder="Select a market to bet on" />
+          <Select.Trigger
+            placeholder="Select a market to bet on"
+            style={{ width: "100%" }}
+          />
           <Select.Content>
             {markets.map((market) => (
               <Select.Item

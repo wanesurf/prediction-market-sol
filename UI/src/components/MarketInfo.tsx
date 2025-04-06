@@ -92,9 +92,14 @@ export default function MarketInfo({
 
   return (
     <Card size="2" style={{ boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)" }}>
-      <Flex direction="column" gap="4" p="4">
-        <Flex justify="between" align="center">
-          <Heading size="4" style={{ fontWeight: 600 }}>
+      <Flex direction="column" gap="4" p={{ initial: "3", sm: "4" }}>
+        <Flex
+          direction={{ initial: "column", sm: "row" }}
+          justify="between"
+          align={{ initial: "start", sm: "center" }}
+          gap={{ initial: "2", sm: "0" }}
+        >
+          <Heading size={{ initial: "3", sm: "4" }} style={{ fontWeight: 600 }}>
             {marketData.title}
           </Heading>
           <Badge color={isResolved ? "green" : "blue"} size="2">
@@ -103,16 +108,25 @@ export default function MarketInfo({
         </Flex>
 
         <Box>
-          <Text size="2" color="gray" style={{ lineHeight: 1.5 }}>
+          <Text
+            size={{ initial: "1", sm: "2" }}
+            color="gray"
+            style={{ lineHeight: 1.5 }}
+          >
             {marketData.description}
           </Text>
         </Box>
 
         <Separator size="2" />
 
-        <Flex justify="between" align="center">
+        <Flex
+          direction={{ initial: "column", sm: "row" }}
+          justify="between"
+          align={{ initial: "start", sm: "center" }}
+          gap={{ initial: "4", sm: "0" }}
+        >
           <Box>
-            <Text size="2" weight="bold" color="gray">
+            <Text size={{ initial: "1", sm: "2" }} weight="bold" color="gray">
               Options
             </Text>
             <Flex gap="2" mt="1">
@@ -125,29 +139,39 @@ export default function MarketInfo({
             </Flex>
           </Box>
           <Box>
-            <Text size="2" weight="bold" color="gray">
+            <Text size={{ initial: "1", sm: "2" }} weight="bold" color="gray">
               Total Value
             </Text>
-            <Text size="3" weight="bold" mt="1" ml="2">
+            <Text size={{ initial: "2", sm: "3" }} weight="bold" mt="1" ml="2">
               {marketData.totalValue.toFixed(2)} SOL
             </Text>
           </Box>
         </Flex>
 
-        <Flex justify="between" align="center">
+        <Flex
+          direction={{ initial: "column", sm: "row" }}
+          justify="between"
+          align={{ initial: "start", sm: "center" }}
+          gap={{ initial: "4", sm: "0" }}
+        >
           <Box>
-            <Text size="2" weight="bold" color="gray">
+            <Text size={{ initial: "1", sm: "2" }} weight="bold" color="gray">
               Bettors
             </Text>
-            <Text size="3" weight="bold" mt="1" ml="2">
+            <Text size={{ initial: "2", sm: "3" }} weight="bold" mt="1" ml="2">
               {marketData.numBettors}
             </Text>
           </Box>
           <Box>
-            <Text size="2" weight="bold" color="gray">
+            <Text size={{ initial: "1", sm: "2" }} weight="bold" color="gray">
               Resolution Source
             </Text>
-            <Text size="2" mt="1" ml="2" style={{ wordBreak: "break-word" }}>
+            <Text
+              size={{ initial: "1", sm: "2" }}
+              mt="1"
+              ml="2"
+              style={{ wordBreak: "break-word" }}
+            >
               {marketData.resolutionSource}
             </Text>
           </Box>
@@ -155,7 +179,7 @@ export default function MarketInfo({
 
         {isResolved && (
           <Box>
-            <Text size="2" weight="bold" color="gray">
+            <Text size={{ initial: "1", sm: "2" }} weight="bold" color="gray">
               Outcome
             </Text>
             <Badge color="green" size="2" mt="1" ml="2">
