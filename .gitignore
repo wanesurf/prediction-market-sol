@@ -10,3 +10,6 @@ contracts/node_modules/*
 contracts/market/node_modules
 contracts/market/.anchor
 contracts/market/node_modules/@coral-xyz/anchor/dist/browser/src/coder/system/accounts.d.ts
+.env
+.env.local
+UI/.env

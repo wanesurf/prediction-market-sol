@@ -1,59 +1,51 @@
-export const IDL = {
-  "version": "0.1.0",
-  "name": "solcast",
+/**
+ * Program IDL in camelCase format in order to be used in JS/TS.
+ *
+ * Note that this is only a type helper and is not the actual IDL. The original
+ * IDL can be found at `target/idl/solcast.json`.
+ */
+export type Solcast = {
+  "address": "7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ",
+  "metadata": {
+    "name": "solcast",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
   "instructions": [
     {
-      "name": "buy_share",
+      "name": "buyShare",
+      "discriminator": [
+        225,
+        72,
+        68,
+        20,
+        61,
+        152,
+        46,
+        177
+      ],
       "accounts": [
         {
           "name": "market",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
           "name": "user",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
-          "name": "market_authority",
-          "isMut": false,
-          "isSigner": false
+          "name": "marketAuthority"
         },
         {
-          "name": "user_token_account",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "market_token_account",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "user_option_token_account",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "token_a_mint",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "token_b_mint",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "token_program",
-          "isMut": false,
-          "isSigner": false
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "market_id",
+          "name": "marketId",
           "type": "string"
         },
         {
@@ -67,52 +59,67 @@ export const IDL = {
       ]
     },
     {
-      "name": "create_market",
+      "name": "createMarket",
+      "discriminator": [
+        103,
+        226,
+        97,
+        235,
+        200,
+        188,
+        251,
+        254
+      ],
       "accounts": [
         {
           "name": "state",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
           "name": "market",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "admin",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
-          "name": "market_authority",
-          "isMut": false,
-          "isSigner": false
+          "name": "marketAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "id"
+              }
+            ]
+          }
         },
         {
-          "name": "token_a_mint",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "token_b_mint",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "system_program",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "token_program",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "rent",
-          "isMut": false,
-          "isSigner": false
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -123,19 +130,15 @@ export const IDL = {
         {
           "name": "options",
           "type": {
-            "array": ["string"]
+            "vec": "string"
           }
         },
         {
-          "name": "end_time",
+          "name": "endTime",
           "type": "i64"
         },
         {
-          "name": "buy_token",
-          "type": "publicKey"
-        },
-        {
-          "name": "banner_url",
+          "name": "bannerUrl",
           "type": "string"
         },
         {
@@ -147,107 +150,145 @@ export const IDL = {
           "type": "string"
         },
         {
-          "name": "end_time_string",
+          "name": "endTimeString",
           "type": "string"
         },
         {
-          "name": "start_time_string",
+          "name": "startTimeString",
           "type": "string"
         },
         {
-          "name": "resolution_source",
+          "name": "resolutionSource",
           "type": "string"
         }
       ]
     },
     {
+      "name": "getAllMarkets",
+      "discriminator": [
+        250,
+        169,
+        148,
+        242,
+        226,
+        139,
+        84,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "state"
+        }
+      ],
+      "args": [],
+      "returns": {
+        "vec": {
+          "defined": {
+            "name": "marketInfo"
+          }
+        }
+      }
+    },
+    {
       "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
       "accounts": [
         {
           "name": "state",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "admin",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
-          "name": "system_program",
-          "isMut": false,
-          "isSigner": false
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
       "name": "resolve",
+      "discriminator": [
+        246,
+        150,
+        236,
+        206,
+        108,
+        63,
+        58,
+        10
+      ],
       "accounts": [
         {
           "name": "state",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
           "name": "market",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
           "name": "admin",
-          "isMut": false,
-          "isSigner": true
+          "signer": true
         }
       ],
       "args": [
         {
-          "name": "market_id",
+          "name": "marketId",
           "type": "string"
         },
         {
-          "name": "winning_option",
+          "name": "winningOption",
           "type": "string"
         }
       ]
     },
     {
       "name": "withdraw",
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
       "accounts": [
         {
           "name": "market",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
           "name": "user",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
-          "name": "market_authority",
-          "isMut": false,
-          "isSigner": false
+          "name": "marketAuthority"
         },
         {
-          "name": "user_token_account",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "market_token_account",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "token_program",
-          "isMut": false,
-          "isSigner": false
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "market_id",
+          "name": "marketId",
           "type": "string"
         }
       ]
@@ -255,7 +296,102 @@ export const IDL = {
   ],
   "accounts": [
     {
-      "name": "Market",
+      "name": "market",
+      "discriminator": [
+        219,
+        190,
+        213,
+        55,
+        0,
+        227,
+        198,
+        154
+      ]
+    },
+    {
+      "name": "state",
+      "discriminator": [
+        216,
+        146,
+        107,
+        94,
+        104,
+        75,
+        182,
+        177
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "unauthorized",
+      "msg": "Unauthorized operation"
+    },
+    {
+      "code": 6001,
+      "name": "marketIdAlreadyExists",
+      "msg": "Market ID already exists"
+    },
+    {
+      "code": 6002,
+      "name": "invalidOption",
+      "msg": "Invalid option"
+    },
+    {
+      "code": 6003,
+      "name": "marketAlreadyResolved",
+      "msg": "Market already resolved"
+    },
+    {
+      "code": 6004,
+      "name": "marketNotFound",
+      "msg": "Market not found"
+    },
+    {
+      "code": 6005,
+      "name": "marketNotResolved",
+      "msg": "Market not resolved"
+    },
+    {
+      "code": 6006,
+      "name": "noWinningShares",
+      "msg": "No winning shares"
+    },
+    {
+      "code": 6007,
+      "name": "alreadyWithdrawn",
+      "msg": "You've already withdrawn your winnings"
+    },
+    {
+      "code": 6008,
+      "name": "invalidOptionsCount",
+      "msg": "Markets must have exactly two options"
+    },
+    {
+      "code": 6009,
+      "name": "invalidTokenAccount",
+      "msg": "Invalid token account"
+    },
+    {
+      "code": 6010,
+      "name": "invalidOptionTokenAccount",
+      "msg": "Invalid option token account"
+    },
+    {
+      "code": 6011,
+      "name": "invalidOptionMint",
+      "msg": "Invalid option mint"
+    },
+    {
+      "code": 6012,
+      "name": "invalidMarketAuthority",
+      "msg": "Invalid market authority"
+    }
+  ],
+  "types": [
+    {
+      "name": "market",
       "type": {
         "kind": "struct",
         "fields": [
@@ -264,11 +400,11 @@ export const IDL = {
             "type": "string"
           },
           {
-            "name": "option_a",
+            "name": "optionA",
             "type": "string"
           },
           {
-            "name": "option_b",
+            "name": "optionB",
             "type": "string"
           },
           {
@@ -278,35 +414,25 @@ export const IDL = {
           {
             "name": "outcome",
             "type": {
-              "defined": "OutcomeState"
+              "defined": {
+                "name": "outcomeState"
+              }
             }
           },
           {
-            "name": "end_time",
+            "name": "endTime",
             "type": "i64"
           },
           {
-            "name": "total_value",
+            "name": "totalValue",
             "type": "u64"
           },
           {
-            "name": "num_bettors",
+            "name": "numBettors",
             "type": "u64"
           },
           {
-            "name": "buy_token",
-            "type": "publicKey"
-          },
-          {
-            "name": "token_a_mint",
-            "type": "publicKey"
-          },
-          {
-            "name": "token_b_mint",
-            "type": "publicKey"
-          },
-          {
-            "name": "banner_url",
+            "name": "bannerUrl",
             "type": "string"
           },
           {
@@ -318,97 +444,87 @@ export const IDL = {
             "type": "string"
           },
           {
-            "name": "end_time_string",
+            "name": "endTimeString",
             "type": "string"
           },
           {
-            "name": "start_time_string",
+            "name": "startTimeString",
             "type": "string"
           },
           {
-            "name": "resolution_source",
+            "name": "resolutionSource",
             "type": "string"
           },
           {
-            "name": "total_option_a",
+            "name": "totalOptionA",
             "type": "u64"
           },
           {
-            "name": "total_option_b",
+            "name": "totalOptionB",
             "type": "u64"
           },
           {
             "name": "authority",
-            "type": "publicKey"
+            "type": "pubkey"
           },
           {
-            "name": "authority_bump",
+            "name": "authorityBump",
             "type": "u8"
           },
           {
             "name": "shares",
             "type": {
-              "array": [{
-                "defined": "Share"
-              }]
+              "vec": {
+                "defined": {
+                  "name": "share"
+                }
+              }
             }
           }
         ]
       }
     },
     {
-      "name": "State",
+      "name": "marketInfo",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "admin",
-            "type": "publicKey"
+            "name": "id",
+            "type": "string"
           },
           {
-            "name": "market_ids",
-            "type": {
-              "array": ["string"]
-            }
-          },
-          {
-            "name": "market_id_counter",
-            "type": "u64"
-          },
-          {
-            "name": "last_market_id",
-            "type": "u64"
-          }
-        ]
-      }
-    }
-  ],
-  "types": [
-    {
-      "name": "OutcomeState",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Unresolved"
-          },
-          {
-            "name": "OptionA"
-          },
-          {
-            "name": "OptionB"
+            "name": "address",
+            "type": "pubkey"
           }
         ]
       }
     },
     {
-      "name": "Share",
+      "name": "outcomeState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "unresolved"
+          },
+          {
+            "name": "optionA"
+          },
+          {
+            "name": "optionB"
+          }
+        ]
+      }
+    },
+    {
+      "name": "share",
       "type": {
         "kind": "struct",
         "fields": [
           {
             "name": "user",
-            "type": "publicKey"
+            "type": "pubkey"
           },
           {
             "name": "option",
@@ -419,81 +535,43 @@ export const IDL = {
             "type": "u64"
           },
           {
-            "name": "has_withdrawn",
+            "name": "hasWithdrawn",
             "type": "bool"
           }
         ]
       }
+    },
+    {
+      "name": "state",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "marketIds",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "marketIdCounter",
+            "type": "u64"
+          },
+          {
+            "name": "lastMarketId",
+            "type": "u64"
+          },
+          {
+            "name": "marketAddresses",
+            "type": {
+              "vec": "pubkey"
+            }
+          }
+        ]
+      }
     }
-  ],
-  "errors": [
-    {
-      "code": 6000,
-      "name": "Unauthorized",
-      "msg": "Unauthorized operation"
-    },
-    {
-      "code": 6001,
-      "name": "MarketIdAlreadyExists",
-      "msg": "Market ID already exists"
-    },
-    {
-      "code": 6002,
-      "name": "InvalidOption",
-      "msg": "Invalid option"
-    },
-    {
-      "code": 6003,
-      "name": "MarketAlreadyResolved",
-      "msg": "Market already resolved"
-    },
-    {
-      "code": 6004,
-      "name": "MarketNotFound",
-      "msg": "Market not found"
-    },
-    {
-      "code": 6005,
-      "name": "MarketNotResolved",
-      "msg": "Market not resolved"
-    },
-    {
-      "code": 6006,
-      "name": "NoWinningShares",
-      "msg": "No winning shares"
-    },
-    {
-      "code": 6007,
-      "name": "AlreadyWithdrawn",
-      "msg": "You've already withdrawn your winnings"
-    },
-    {
-      "code": 6008,
-      "name": "InvalidOptionsCount",
-      "msg": "Markets must have exactly two options"
-    },
-    {
-      "code": 6009,
-      "name": "InvalidTokenAccount",
-      "msg": "Invalid token account"
-    },
-    {
-      "code": 6010,
-      "name": "InvalidOptionTokenAccount",
-      "msg": "Invalid option token account"
-    },
-    {
-      "code": 6011,
-      "name": "InvalidOptionMint",
-      "msg": "Invalid option mint"
-    },
-    {
-      "code": 6012,
-      "name": "InvalidMarketAuthority",
-      "msg": "Invalid market authority"
-    }
-  ],
-  "metadata": {
-    "address": "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
-  }
-}; 
+  ]
+};

@@ -1,5 +1,5 @@
 {
-  "address": "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS",
+  "address": "7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ",
   "metadata": {
     "name": "solcast",
     "version": "0.1.0",
@@ -9,16 +9,7 @@
   "instructions": [
     {
       "name": "buy_share",
-      "discriminator": [
-        225,
-        72,
-        68,
-        20,
-        61,
-        152,
-        46,
-        177
-      ],
+      "discriminator": [225, 72, 68, 20, 61, 152, 46, 177],
       "accounts": [
         {
           "name": "market",
@@ -33,28 +24,8 @@
           "name": "market_authority"
         },
         {
-          "name": "user_token_account",
-          "writable": true
-        },
-        {
-          "name": "market_token_account",
-          "writable": true
-        },
-        {
-          "name": "user_option_token_account",
-          "writable": true
-        },
-        {
-          "name": "token_a_mint",
-          "writable": true
-        },
-        {
-          "name": "token_b_mint",
-          "writable": true
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -74,16 +45,7 @@
     },
     {
       "name": "create_market",
-      "discriminator": [
-        103,
-        226,
-        97,
-        235,
-        200,
-        188,
-        251,
-        254
-      ],
+      "discriminator": [103, 226, 97, 235, 200, 188, 251, 254],
       "accounts": [
         {
           "name": "state",
@@ -106,22 +68,8 @@
               {
                 "kind": "const",
                 "value": [
-                  109,
-                  97,
-                  114,
-                  107,
-                  101,
-                  116,
-                  95,
-                  97,
-                  117,
-                  116,
-                  104,
-                  111,
-                  114,
-                  105,
-                  116,
-                  121
+                  109, 97, 114, 107, 101, 116, 95, 97, 117, 116, 104, 111, 114,
+                  105, 116, 121
                 ]
               },
               {
@@ -132,26 +80,8 @@
           }
         },
         {
-          "name": "token_a_mint",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "token_b_mint",
-          "writable": true,
-          "signer": true
-        },
-        {
           "name": "system_program",
           "address": "11111111111111111111111111111111"
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
-        },
-        {
-          "name": "rent",
-          "address": "SysvarRent111111111111111111111111111111111"
         }
       ],
       "args": [
@@ -168,10 +98,6 @@
         {
           "name": "end_time",
           "type": "i64"
-        },
-        {
-          "name": "buy_token",
-          "type": "pubkey"
         },
         {
           "name": "banner_url",
@@ -200,17 +126,25 @@
       ]
     },
     {
-      "name": "initialize",
-      "discriminator": [
-        175,
-        175,
-        109,
-        31,
-        13,
-        152,
-        155,
-        237
+      "name": "get_all_markets",
+      "discriminator": [250, 169, 148, 242, 226, 139, 84, 90],
+      "accounts": [
+        {
+          "name": "state"
+        }
       ],
+      "args": [],
+      "returns": {
+        "vec": {
+          "defined": {
+            "name": "MarketInfo"
+          }
+        }
+      }
+    },
+    {
+      "name": "initialize",
+      "discriminator": [175, 175, 109, 31, 13, 152, 155, 237],
       "accounts": [
         {
           "name": "state",
@@ -231,16 +165,7 @@
     },
     {
       "name": "resolve",
-      "discriminator": [
-        246,
-        150,
-        236,
-        206,
-        108,
-        63,
-        58,
-        10
-      ],
+      "discriminator": [246, 150, 236, 206, 108, 63, 58, 10],
       "accounts": [
         {
           "name": "state",
@@ -268,16 +193,7 @@
     },
     {
       "name": "withdraw",
-      "discriminator": [
-        183,
-        18,
-        70,
-        156,
-        148,
-        109,
-        161,
-        34
-      ],
+      "discriminator": [183, 18, 70, 156, 148, 109, 161, 34],
       "accounts": [
         {
           "name": "market",
@@ -292,16 +208,8 @@
           "name": "market_authority"
         },
         {
-          "name": "user_token_account",
-          "writable": true
-        },
-        {
-          "name": "market_token_account",
-          "writable": true
-        },
-        {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -315,29 +223,11 @@
   "accounts": [
     {
       "name": "Market",
-      "discriminator": [
-        219,
-        190,
-        213,
-        55,
-        0,
-        227,
-        198,
-        154
-      ]
+      "discriminator": [219, 190, 213, 55, 0, 227, 198, 154]
     },
     {
       "name": "State",
-      "discriminator": [
-        216,
-        146,
-        107,
-        94,
-        104,
-        75,
-        182,
-        177
-      ]
+      "discriminator": [216, 146, 107, 94, 104, 75, 182, 177]
     }
   ],
   "errors": [
@@ -450,18 +340,6 @@
             "type": "u64"
           },
           {
-            "name": "buy_token",
-            "type": "pubkey"
-          },
-          {
-            "name": "token_a_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "token_b_mint",
-            "type": "pubkey"
-          },
-          {
             "name": "banner_url",
             "type": "string"
           },
@@ -510,6 +388,22 @@
                 }
               }
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "string"
+          },
+          {
+            "name": "address",
+            "type": "pubkey"
           }
         ]
       }
@@ -577,6 +471,12 @@
           {
             "name": "last_market_id",
             "type": "u64"
+          },
+          {
+            "name": "market_addresses",
+            "type": {
+              "vec": "pubkey"
+            }
           }
         ]
       }

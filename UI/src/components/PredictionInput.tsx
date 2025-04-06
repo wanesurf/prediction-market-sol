@@ -92,7 +92,7 @@ export default function PredictionInput({
         marketAccount.toString()
       );
 
-      const provider = new AnchorProvider(connection, wallet, {
+      const provider = new AnchorProvider(connection, wallet as any, {
         commitment: "confirmed",
       });
 
@@ -253,7 +253,7 @@ export default function PredictionInput({
         optionB: marketAccountData.optionB,
         marketAuthority: marketAccountData.authority?.toString(),
         isMatchingAuthority: marketAuthority.equals(
-          marketAccountData.authority
+          marketAccountData.authority as PublicKey
         ),
       });
 

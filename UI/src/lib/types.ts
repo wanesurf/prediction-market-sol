@@ -6,6 +6,13 @@ export interface MarketInfo {
   address: PublicKey;
 }
 
+export interface Share {
+  user: string;
+  option: string;
+  amount: number;
+  has_withdrawn: boolean;
+}
+
 export interface MarketData {
   id: string;
   title: string;
@@ -21,7 +28,7 @@ export interface MarketData {
   resolutionSource: string;
   totalOptionA?: number;
   totalOptionB?: number;
-  shares?: any[]; // Type can be defined more specifically based on actual data structure
+  shares?: Share[];
   buyToken?: PublicKey;
   authority?: PublicKey;
   endTimeString?: string;
@@ -49,20 +56,15 @@ export const idl: Idl = {
   name: "solcast",
   instructions: [
     {
-      name: "buy_share",
+      name: "buyShare",
       accounts: [
         { name: "market", isMut: true, isSigner: false },
         { name: "user", isMut: true, isSigner: true },
-        { name: "market_authority", isMut: false, isSigner: false },
-        { name: "user_token_account", isMut: true, isSigner: false },
-        { name: "market_token_account", isMut: true, isSigner: false },
-        { name: "user_option_token_account", isMut: true, isSigner: false },
-        { name: "token_a_mint", isMut: true, isSigner: false },
-        { name: "token_b_mint", isMut: true, isSigner: false },
-        { name: "token_program", isMut: false, isSigner: false },
+        { name: "marketAuthority", isMut: true, isSigner: false },
+        { name: "systemProgram", isMut: false, isSigner: false },
       ],
       args: [
-        { name: "market_id", type: "string" },
+        { name: "marketId", type: "string" },
         { name: "option", type: "string" },
         { name: "amount", type: "u64" },
       ],
@@ -74,17 +76,12 @@ export const idl: Idl = {
         { name: "market", isMut: true, isSigner: true },
         { name: "admin", isMut: true, isSigner: true },
         { name: "market_authority", isMut: false, isSigner: false },
-        { name: "token_a_mint", isMut: true, isSigner: true },
-        { name: "token_b_mint", isMut: true, isSigner: true },
         { name: "system_program", isMut: false, isSigner: false },
-        { name: "token_program", isMut: false, isSigner: false },
-        { name: "rent", isMut: false, isSigner: false },
       ],
       args: [
         { name: "id", type: "string" },
         { name: "options", type: { vec: "string" } },
         { name: "end_time", type: "i64" },
-        { name: "buy_token", type: "publicKey" },
         { name: "banner_url", type: "string" },
         { name: "description", type: "string" },
         { name: "title", type: "string" },
@@ -129,10 +126,8 @@ export const idl: Idl = {
       accounts: [
         { name: "market", isMut: true, isSigner: false },
         { name: "user", isMut: true, isSigner: true },
-        { name: "market_authority", isMut: false, isSigner: false },
-        { name: "user_token_account", isMut: true, isSigner: false },
-        { name: "market_token_account", isMut: true, isSigner: false },
-        { name: "token_program", isMut: false, isSigner: false },
+        { name: "market_authority", isMut: true, isSigner: false },
+        { name: "system_program", isMut: false, isSigner: false },
       ],
       args: [
         { name: "market_id", type: "string" },
@@ -146,26 +141,23 @@ export const idl: Idl = {
         kind: "struct",
         fields: [
           { name: "id", type: "string" },
-          { name: "option_a", type: "string" },
-          { name: "option_b", type: "string" },
+          { name: "optionA", type: "string" },
+          { name: "optionB", type: "string" },
           { name: "resolved", type: "bool" },
           { name: "outcome", type: { defined: "OutcomeState" } },
-          { name: "end_time", type: "i64" },
-          { name: "total_value", type: "u64" },
-          { name: "num_bettors", type: "u64" },
-          { name: "buy_token", type: "publicKey" },
-          { name: "token_a_mint", type: "publicKey" },
-          { name: "token_b_mint", type: "publicKey" },
-          { name: "banner_url", type: "string" },
+          { name: "endTime", type: "i64" },
+          { name: "totalValue", type: "u64" },
+          { name: "numBettors", type: "u64" },
+          { name: "bannerUrl", type: "string" },
           { name: "description", type: "string" },
           { name: "title", type: "string" },
-          { name: "end_time_string", type: "string" },
-          { name: "start_time_string", type: "string" },
-          { name: "resolution_source", type: "string" },
-          { name: "total_option_a", type: "u64" },
-          { name: "total_option_b", type: "u64" },
+          { name: "endTimeString", type: "string" },
+          { name: "startTimeString", type: "string" },
+          { name: "resolutionSource", type: "string" },
+          { name: "totalOptionA", type: "u64" },
+          { name: "totalOptionB", type: "u64" },
           { name: "authority", type: "publicKey" },
-          { name: "authority_bump", type: "u8" },
+          { name: "authorityBump", type: "u8" },
           { name: "shares", type: { vec: { defined: "Share" } } },
         ],
       },
