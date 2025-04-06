@@ -1,6 +1,14 @@
 "use client";
 
-import { Box, Card, Flex, Text, Heading } from "@radix-ui/themes";
+import {
+  Box,
+  Card,
+  Flex,
+  Text,
+  Heading,
+  Badge,
+  Separator,
+} from "@radix-ui/themes";
 import { MarketData, MarketInfoProps } from "../lib/types";
 
 export default function MarketInfo({
@@ -17,9 +25,18 @@ export default function MarketInfo({
 }) {
   if (loading) {
     return (
-      <Card size="2">
-        <Flex direction="column" gap="3" p="4">
-          <Text>Loading market information...</Text>
+      <Card size="2" style={{ boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)" }}>
+        <Flex
+          direction="column"
+          gap="3"
+          p="4"
+          align="center"
+          justify="center"
+          style={{ minHeight: "150px" }}
+        >
+          <Text size="2" color="gray">
+            Loading market information...
+          </Text>
         </Flex>
       </Card>
     );
@@ -27,9 +44,18 @@ export default function MarketInfo({
 
   if (error) {
     return (
-      <Card size="2">
-        <Flex direction="column" gap="3" p="4">
-          <Text color="red">{error}</Text>
+      <Card size="2" style={{ boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)" }}>
+        <Flex
+          direction="column"
+          gap="3"
+          p="4"
+          align="center"
+          justify="center"
+          style={{ minHeight: "150px" }}
+        >
+          <Text size="2" color="red" weight="bold">
+            {error}
+          </Text>
         </Flex>
       </Card>
     );
@@ -37,9 +63,18 @@ export default function MarketInfo({
 
   if (!marketData) {
     return (
-      <Card size="2">
-        <Flex direction="column" gap="3" p="4">
-          <Text>No market selected</Text>
+      <Card size="2" style={{ boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)" }}>
+        <Flex
+          direction="column"
+          gap="3"
+          p="4"
+          align="center"
+          justify="center"
+          style={{ minHeight: "150px" }}
+        >
+          <Text size="2" color="gray">
+            No market selected
+          </Text>
         </Flex>
       </Card>
     );
@@ -55,78 +90,79 @@ export default function MarketInfo({
       )} days`
     : "Ended";
 
-  // Calculate odds percentages if both options have values
-  const totalPoolSize =
-    (marketData.totalOptionA || 0) + (marketData.totalOptionB || 0);
-  const optionAPercentage =
-    totalPoolSize > 0
-      ? (((marketData.totalOptionA || 0) / totalPoolSize) * 100).toFixed(1)
-      : "0";
-  const optionBPercentage =
-    totalPoolSize > 0
-      ? (((marketData.totalOptionB || 0) / totalPoolSize) * 100).toFixed(1)
-      : "0";
-
   return (
-    <Card size="2">
-      <Flex direction="column" gap="3" p="4">
-        <Heading size="4">{marketData.title}</Heading>
+    <Card size="2" style={{ boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)" }}>
+      <Flex direction="column" gap="4" p="4">
+        <Flex justify="between" align="center">
+          <Heading size="4" style={{ fontWeight: 600 }}>
+            {marketData.title}
+          </Heading>
+          <Badge color={isResolved ? "green" : "blue"} size="2">
+            {timeRemaining}
+          </Badge>
+        </Flex>
 
         <Box>
-          <Text size="2" color="gray">
+          <Text size="2" color="gray" style={{ lineHeight: 1.5 }}>
             {marketData.description}
           </Text>
         </Box>
 
+        <Separator size="2" />
+
         <Flex justify="between" align="center">
           <Box>
-            <Text weight="bold">Options:</Text>
-            <Text>
-              {marketData.optionA} / {marketData.optionB}
+            <Text size="2" weight="bold" color="gray">
+              Options
+            </Text>
+            <Flex gap="2" mt="1">
+              <Badge color="green" size="2">
+                {marketData.optionA}
+              </Badge>
+              <Badge color="red" size="2">
+                {marketData.optionB}
+              </Badge>
+            </Flex>
+          </Box>
+          <Box>
+            <Text size="2" weight="bold" color="gray">
+              Total Value
+            </Text>
+            <Text size="3" weight="bold" mt="1" ml="2">
+              {marketData.totalValue.toFixed(2)} SOL
+            </Text>
+          </Box>
+        </Flex>
+
+        <Flex justify="between" align="center">
+          <Box>
+            <Text size="2" weight="bold" color="gray">
+              Bettors
+            </Text>
+            <Text size="3" weight="bold" mt="1" ml="2">
+              {marketData.numBettors}
             </Text>
           </Box>
           <Box>
-            <Text weight="bold">Status:</Text>
-            <Text>{timeRemaining}</Text>
+            <Text size="2" weight="bold" color="gray">
+              Resolution Source
+            </Text>
+            <Text size="2" mt="1" ml="2" style={{ wordBreak: "break-word" }}>
+              {marketData.resolutionSource}
+            </Text>
           </Box>
         </Flex>
-
-        <Flex justify="between" align="center">
-          <Box>
-            <Text weight="bold">Total Value:</Text>
-            <Text>{marketData.totalValue.toFixed(2)} SOL</Text>
-          </Box>
-          <Box>
-            <Text weight="bold">Bettors:</Text>
-            <Text>{marketData.numBettors}</Text>
-          </Box>
-        </Flex>
-
-        {totalPoolSize > 0 && (
-          <Box>
-            <Text weight="bold">Current Odds:</Text>
-            <Flex gap="2">
-              <Text>
-                {marketData.optionA}: {optionAPercentage}%
-              </Text>
-              <Text>
-                {marketData.optionB}: {optionBPercentage}%
-              </Text>
-            </Flex>
-          </Box>
-        )}
 
         {isResolved && (
           <Box>
-            <Text weight="bold">Outcome:</Text>
-            <Text>{marketData.outcome}</Text>
+            <Text size="2" weight="bold" color="gray">
+              Outcome
+            </Text>
+            <Badge color="green" size="2" mt="1">
+              {marketData.outcome}
+            </Badge>
           </Box>
         )}
-
-        <Box>
-          <Text weight="bold">Resolution Source:</Text>
-          <Text>{marketData.resolutionSource}</Text>
-        </Box>
       </Flex>
     </Card>
   );

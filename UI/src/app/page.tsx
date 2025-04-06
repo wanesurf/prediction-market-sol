@@ -159,18 +159,18 @@ export default function Home() {
 
         <Grid columns="1" gap="4" width="100%">
           {/* Right Column */}
-          <Card size="2">
-            <Flex direction="column" gap="4">
-              <PredictionInput
-                marketAccount={
-                  selectedMarketId ? new PublicKey(selectedMarketId) : undefined
-                }
-                marketData={marketData}
-                loading={loading}
-                error={error}
-              />
-            </Flex>
-          </Card>
+          {/* <Card size="2"> */}
+          <Flex direction="column" gap="4">
+            <PredictionInput
+              marketAccount={
+                selectedMarketId ? new PublicKey(selectedMarketId) : undefined
+              }
+              marketData={marketData}
+              loading={loading}
+              error={error}
+            />
+          </Flex>
+          {/* </Card> */}
           <MarketInfo
             marketAddress={selectedMarketId}
             marketData={marketData}
