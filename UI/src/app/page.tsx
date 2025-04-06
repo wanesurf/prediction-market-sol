@@ -6,7 +6,7 @@ import ConnectButton from "../components/ConnectButton";
 import Image from "next/image";
 import { Box, Card, Flex, Grid, Text, Tabs } from "@radix-ui/themes";
 import SolcastLogo from "../assets/Solcast.svg";
-import bg from "../assets/bg.webp";
+import bg from "../assets/BG.png";
 import PredictionInput from "../components/PredictionInput";
 import MarketInfo from "../components/MarketInfo";
 import MarketSelector from "../components/MarketSelector";
