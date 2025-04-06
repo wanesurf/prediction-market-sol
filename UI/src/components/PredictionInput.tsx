@@ -1,11 +1,12 @@
 import React from "react";
+import ReactConfetti from "react-confetti";
+import { useEffect, useState, useCallback } from "react";
 
 import up_higher from "../assets/up_higher.gif";
 import decide_no from "../assets/decide_no.gif";
 import make_decision from "../assets/make_decision.gif";
 import solana from "../assets/solana-sol-logo.svg";
 
-import { useEffect, useState, useCallback } from "react";
 import { Card, Skeleton } from "@radix-ui/themes";
 import { VoteBar } from "./VoteBar";
 import { Input } from "./Input";
@@ -43,6 +44,7 @@ export default function PredictionInput({
   const [showEstimatedWinnings, setShowEstimatedWinnings] = useState(false);
   const [option, setOption] = useState<"Yes" | "No">("Yes");
   const [isLoading, setIsLoading] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [odds, setOdds] = useState<{ oddsA: number; oddsB: number }>({
     oddsA: 0,
     oddsB: 0,
@@ -51,10 +53,33 @@ export default function PredictionInput({
     yes: number;
     no: number;
   }>({ yes: 0, no: 0 });
+  const [userWinnings, setUserWinnings] = useState<number | null>(null);
+  const [hasWithdrawn, setHasWithdrawn] = useState<boolean>(false);
 
   const { publicKey, connected, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const wallet = useWallet();
+
+  // Add window size state for confetti
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== "undefined" ? window.innerWidth : 0,
+    height: typeof window !== "undefined" ? window.innerHeight : 0,
+  });
+
+  // Update window size on resize
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
 
   // Calculate odds when market data changes
   useEffect(() => {
@@ -449,6 +474,10 @@ export default function PredictionInput({
         const signature = await sendTransaction(transaction, connection);
         await connection.confirmTransaction(signature, "confirmed");
 
+        // Show confetti on successful withdrawal
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000); // Hide confetti after 5 seconds
+
         notify({
           type: "success",
           message: "Successfully withdrew SOL winnings!",
@@ -528,6 +557,77 @@ export default function PredictionInput({
     }
   }, [fetchMarketData, marketAccount]);
 
+  // Calculate user's winnings when market is resolved
+  useEffect(() => {
+    if (marketData && marketData.resolved && publicKey && marketData.shares) {
+      console.log("Calculating winnings for user:", publicKey.toString());
+      console.log("Market outcome:", marketData.outcome);
+      console.log("Available shares:", marketData.shares);
+
+      // Find user's winning share
+      const winningOption = marketData.outcome;
+      const userShare = marketData.shares.find((share) => {
+        const shareUserPubkey = new PublicKey(share.user);
+        const matches =
+          shareUserPubkey.equals(publicKey) && share.option === winningOption;
+        console.log("Checking share:", {
+          shareUser: shareUserPubkey.toString(),
+          currentUser: publicKey.toString(),
+          shareOption: share.option,
+          winningOption,
+          matches,
+        });
+        return matches;
+      });
+
+      console.log("Found user share:", userShare);
+
+      if (userShare) {
+        // Calculate winnings using the same formula as in the smart contract
+        const userShareAmount = userShare.amount / 1e9; // Convert from lamports to SOL
+        const totalWinningOption =
+          winningOption === marketData.optionA
+            ? marketData.totalOptionA || 0
+            : marketData.totalOptionB || 0;
+
+        console.log("Winnings calculation:", {
+          userShareAmount,
+          totalWinningOption,
+          totalValue: marketData.totalValue,
+        });
+
+        if (totalWinningOption > 0) {
+          // Apply 5% commission rate on winnings
+          const COMMISSION_RATE = 0.05;
+
+          const userShareRatio = userShareAmount / totalWinningOption;
+          const totalPayout = marketData.totalValue * userShareRatio;
+          const commission = totalPayout * COMMISSION_RATE;
+          const finalPayout = totalPayout - commission;
+
+          console.log("Final winnings calculation:", {
+            userShareRatio,
+            totalPayout,
+            commission,
+            finalPayout,
+          });
+
+          setUserWinnings(finalPayout);
+          setHasWithdrawn(userShare.has_withdrawn);
+        } else {
+          setUserWinnings(0);
+          setHasWithdrawn(false);
+        }
+      } else {
+        setUserWinnings(0);
+        setHasWithdrawn(false);
+      }
+    } else {
+      setUserWinnings(null);
+      setHasWithdrawn(false);
+    }
+  }, [marketData, publicKey]);
+
   const handleAmountChange = (value: string) => {
     // Only allow numbers and at most one decimal point
     const sanitizedValue = value.replace(/[^\d.]/g, "");
@@ -566,6 +666,17 @@ export default function PredictionInput({
 
   return (
     <Card className="shadow-2xl w-full h-full flex flex-col items-center justify-start">
+      {/* Add confetti component */}
+      {showConfetti && (
+        <ReactConfetti
+          width={windowSize.width}
+          height={windowSize.height}
+          numberOfPieces={200}
+          recycle={false}
+          colors={["#22c55e", "#10b981", "#059669", "#047857"]}
+        />
+      )}
+
       {marketData && (
         <div className="w-full text-center mb-4">
           <h2 className="text-xl font-bold text-white">{marketData.title}</h2>
@@ -636,11 +747,49 @@ export default function PredictionInput({
         <div className="w-full text-center mb-6">
           <div className="bg-indigo-600/30 rounded-lg p-3">
             <p className="text-white font-medium">
-              Market Resolved: {marketData.outcome}
+              Market Resolved to: {marketData.outcome}
             </p>
           </div>
 
-          {connected && marketData.resolved && (
+          {/* Display user's winnings if available */}
+          {connected && userWinnings !== null && (
+            <div className="mt-4 p-4 bg-white/5 rounded-lg">
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Your Winnings
+              </h3>
+              {userWinnings > 0 ? (
+                <>
+                  <p className="text-2xl font-bold text-green-500">
+                    {userWinnings.toFixed(4)} SOL
+                  </p>
+                  {tokenPrice > 0 && (
+                    <p className="text-sm text-white/60">
+                      ≈ ${(userWinnings * tokenPrice).toFixed(2)} USD
+                    </p>
+                  )}
+                  {hasWithdrawn ? (
+                    <p className="text-sm text-white/60 mt-2">
+                      You have already withdrawn your winnings
+                    </p>
+                  ) : (
+                    <Button
+                      className="w-full h-12 mt-4 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-all duration-300"
+                      onClick={withdrawWinnings}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "Processing..." : "Withdraw SOL Winnings"}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <p className="text-white/70">
+                  You don't have any winning shares for this market
+                </p>
+              )}
+            </div>
+          )}
+
+          {connected && marketData.resolved && userWinnings === null && (
             <Button
               className="w-full h-12 mt-4 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-all duration-300"
               onClick={withdrawWinnings}

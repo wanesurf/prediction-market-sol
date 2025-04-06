@@ -158,7 +158,7 @@ export default function MarketInfo({
             <Text size="2" weight="bold" color="gray">
               Outcome
             </Text>
-            <Badge color="green" size="2" mt="1">
+            <Badge color="green" size="2" mt="1" ml="2">
               {marketData.outcome}
             </Badge>
           </Box>
