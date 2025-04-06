@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
-use std::collections::HashMap;
+use anchor_lang::system_program;
 
-declare_id!("7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS");
+declare_id!("7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ");
 
 #[program]
 pub mod solcast {
@@ -23,7 +22,6 @@ pub mod solcast {
         id: String,
         options: Vec<String>,
         end_time: i64,
-        buy_token: Pubkey, // Mint address of token used for buying shares
         banner_url: String,
         description: String,
         title: String,
@@ -53,35 +51,6 @@ pub mod solcast {
         state.market_ids.push(id.clone());
         state.market_addresses.push(ctx.accounts.market.key());
 
-        // Create token mints
-        // Initialize mint A
-        token::initialize_mint(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                token::InitializeMint {
-                    mint: ctx.accounts.token_a_mint.to_account_info(),
-                    rent: ctx.accounts.rent.to_account_info(),
-                },
-            ),
-            6, // decimals
-            &ctx.accounts.market_authority.key(),
-            Some(&ctx.accounts.market_authority.key()),
-        )?;
-
-        // Initialize mint B
-        token::initialize_mint(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                token::InitializeMint {
-                    mint: ctx.accounts.token_b_mint.to_account_info(),
-                    rent: ctx.accounts.rent.to_account_info(),
-                },
-            ),
-            6, // decimals
-            &ctx.accounts.market_authority.key(),
-            Some(&ctx.accounts.market_authority.key()),
-        )?;
-
         // Create market data
         let market = &mut ctx.accounts.market;
         market.id = id;
@@ -92,9 +61,6 @@ pub mod solcast {
         market.end_time = end_time;
         market.total_value = 0;
         market.num_bettors = 0;
-        market.buy_token = buy_token;
-        market.token_a_mint = ctx.accounts.token_a_mint.key();
-        market.token_b_mint = ctx.accounts.token_b_mint.key();
         market.banner_url = banner_url;
         market.description = description;
         market.title = title;
@@ -126,90 +92,45 @@ pub mod solcast {
         // Check if market is already resolved
         require!(!market.resolved, SolcastError::MarketAlreadyResolved);
 
-        // Validate option is either option_a or option_b
+        // Check if the option is valid
         require!(
             option == market.option_a || option == market.option_b,
             SolcastError::InvalidOption
         );
 
-        // Transfer tokens from user to program authority
-        let transfer_ctx = CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.user_token_account.to_account_info(),
-                to: ctx.accounts.market_token_account.to_account_info(),
-                authority: ctx.accounts.user.to_account_info(),
-            },
-        );
-        token::transfer(transfer_ctx, amount)?;
-
-        // Mint the appropriate option token to the user
-        let option_mint = if option == market.option_a {
-            ctx.accounts.token_a_mint.to_account_info()
-        } else {
-            ctx.accounts.token_b_mint.to_account_info()
-        };
-
-        // Mint authority seeds for signing
-        let authority_seeds = &[
-            b"market_authority",
-            market.id.as_bytes(),
-            &[market.authority_bump],
-        ];
-        let signer = &[&authority_seeds[..]];
-
-        // Mint tokens to user
-        let mint_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            token::MintTo {
-                mint: option_mint,
-                to: ctx.accounts.user_option_token_account.to_account_info(),
-                authority: ctx.accounts.market_authority.to_account_info(),
-            },
-            signer,
-        );
-        token::mint_to(mint_ctx, amount)?;
-
-        // Update market state
-        market.total_value += amount;
+        // Update market totals
+        market.total_value = market.total_value.checked_add(amount).unwrap();
 
         if option == market.option_a {
-            market.total_option_a += amount;
+            market.total_option_a = market.total_option_a.checked_add(amount).unwrap();
         } else {
-            market.total_option_b += amount;
+            market.total_option_b = market.total_option_b.checked_add(amount).unwrap();
         }
 
-        // Update or add user share
-        let user_key = ctx.accounts.user.key();
-
-        // Try to find existing share for this user
-        let share_index = market
-            .shares
-            .iter()
-            .position(|s| s.user == user_key && s.option == option);
-
-        if let Some(index) = share_index {
-            // Update existing share
-            market.shares[index].amount += amount;
-        } else {
-            // Create new share
-            market.shares.push(Share {
-                user: user_key,
-                option: option.clone(),
-                amount,
-                has_withdrawn: false,
-            });
-
-            // Check if this is a new user for this market
-            let user_count = market
-                .shares
-                .iter()
-                .map(|s| s.user)
-                .collect::<std::collections::HashSet<_>>()
-                .len();
-
-            market.num_bettors = user_count as u64;
+        // Increment bettor count if this is the first bet from this user
+        let user = ctx.accounts.user.key();
+        let is_new_bettor = !market.shares.iter().any(|s| s.user == user);
+        if is_new_bettor {
+            market.num_bettors = market.num_bettors.checked_add(1).unwrap();
         }
+
+        // Add the share
+        market.shares.push(Share {
+            user,
+            option,
+            amount,
+            has_withdrawn: false,
+        });
+
+        // Transfer SOL from user to market authority - no authority validation
+        let transfer_ctx = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.user.to_account_info(),
+                to: ctx.accounts.market_authority.to_account_info(),
+            },
+        );
+        system_program::transfer(transfer_ctx, amount)?;
 
         Ok(())
     }
@@ -310,7 +231,7 @@ pub mod solcast {
         // Mark as withdrawn
         market.shares[share_index].has_withdrawn = true;
 
-        // Transfer tokens from market to user
+        // Transfer SOL from market authority to user
         let seeds = &[
             b"market_authority",
             market.id.as_bytes(),
@@ -319,15 +240,14 @@ pub mod solcast {
         let signer = &[&seeds[..]];
 
         let transfer_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.market_token_account.to_account_info(),
-                to: ctx.accounts.user_token_account.to_account_info(),
-                authority: ctx.accounts.market_authority.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.market_authority.to_account_info(),
+                to: ctx.accounts.user.to_account_info(),
             },
             signer,
         );
-        token::transfer(transfer_ctx, final_payout)?;
+        system_program::transfer(transfer_ctx, final_payout)?;
 
         Ok(())
     }
@@ -380,67 +300,23 @@ pub struct CreateMarket<'info> {
     )]
     pub market_authority: UncheckedAccount<'info>,
 
-    /// CHECK: We're initializing the mint with token instructions
-    #[account(init, payer = admin, space = 82, owner = token_program.key())]
-    pub token_a_mint: UncheckedAccount<'info>,
-
-    /// CHECK: We're initializing the mint with token instructions  
-    #[account(init, payer = admin, space = 82, owner = token_program.key())]
-    pub token_b_mint: UncheckedAccount<'info>,
-
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
-    pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
 #[instruction(market_id: String, option: String)]
 pub struct BuyShare<'info> {
-    #[account(
-        mut,
-        constraint = market.authority == market_authority.key() @ SolcastError::InvalidMarketAuthority
-    )]
+    #[account(mut)]
     pub market: Account<'info, Market>,
 
     #[account(mut)]
     pub user: Signer<'info>,
 
-    /// CHECK: This authority is verified in the market account
+    /// CHECK: This is an arbitrary account that will receive funds
+    #[account(mut)]
     pub market_authority: UncheckedAccount<'info>,
 
-    /// CHECK: Account ownership and mint are verified in constraints
-    #[account(
-        mut,
-        owner = user.key() @ SolcastError::InvalidTokenAccount,
-    )]
-    pub user_token_account: UncheckedAccount<'info>,
-
-    /// CHECK: Account ownership and mint are verified in constraints
-    #[account(
-        mut,
-        owner = market_authority.key() @ SolcastError::InvalidTokenAccount,
-    )]
-    pub market_token_account: UncheckedAccount<'info>,
-
-    /// CHECK: Mint is verified based on selected option
-    #[account(mut)]
-    pub user_option_token_account: UncheckedAccount<'info>,
-
-    /// CHECK: This is verified in the instruction
-    #[account(
-        mut,
-        constraint = (option == market.option_a && token_a_mint.key() == market.token_a_mint) @ SolcastError::InvalidOptionMint,
-    )]
-    pub token_a_mint: UncheckedAccount<'info>,
-
-    /// CHECK: This is verified in the instruction
-    #[account(
-        mut,
-        constraint = (option == market.option_b && token_b_mint.key() == market.token_b_mint) @ SolcastError::InvalidOptionMint,
-    )]
-    pub token_b_mint: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -466,23 +342,10 @@ pub struct Withdraw<'info> {
     pub user: Signer<'info>,
 
     /// CHECK: This authority is verified in the market account
+    #[account(mut)]
     pub market_authority: UncheckedAccount<'info>,
 
-    /// CHECK: Account ownership is verified in constraints
-    #[account(
-        mut,
-        owner = user.key() @ SolcastError::InvalidTokenAccount,
-    )]
-    pub user_token_account: UncheckedAccount<'info>,
-
-    /// CHECK: Account ownership is verified in constraints
-    #[account(
-        mut,
-        owner = market_authority.key() @ SolcastError::InvalidTokenAccount,
-    )]
-    pub market_token_account: UncheckedAccount<'info>,
-
-    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[account]
@@ -513,9 +376,6 @@ pub struct Market {
     pub end_time: i64,
     pub total_value: u64,
     pub num_bettors: u64,
-    pub buy_token: Pubkey,
-    pub token_a_mint: Pubkey,
-    pub token_b_mint: Pubkey,
     pub banner_url: String,
     pub description: String,
     pub title: String,
@@ -539,9 +399,6 @@ impl Market {
                              8 +  // end_time
                              8 +  // total_value
                              8 +  // num_bettors
-                             32 + // buy_token pubkey
-                             32 + // token_a_mint pubkey
-                             32 + // token_b_mint pubkey
                              100 + // banner_url (assuming max length)
                              200 + // description (assuming max length)
                              100 + // title (assuming max length)

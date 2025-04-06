@@ -46,7 +46,7 @@ async function main() {
     console.log('Admin public key:', adminKeypair.publicKey.toString());
     
     // Get program ID
-    const programId = new PublicKey(process.env.PROGRAM_ID || "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS");
+    const programId = new PublicKey(process.env.PROGRAM_ID || "7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ");
     console.log('Using program ID:', programId.toString());
 
     // Get buy token

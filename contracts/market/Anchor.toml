@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-solcast = "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
+solcast = "7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ"
 
 [programs.devnet]
-solcast = "7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS"
+solcast = "7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ"
 
 [registry]
 url = "https://api.apr.dev"
