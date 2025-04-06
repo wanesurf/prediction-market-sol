@@ -124,7 +124,7 @@ export default function Home() {
   }, [connection, selectedMarketId, wallet]);
 
   return (
-    <div className="relative grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family:var(--font-geist-sans)]">
+    <div className="relative grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-4 md:p-8 pb-20 gap-16  font-[family:var(--font-geist-sans)]">
       {/* Background Image */}
       <Image
         src={bg}
@@ -135,7 +135,7 @@ export default function Home() {
         priority
       />
 
-      <Flex justify="between" width="100%" align="center">
+      <Flex mt="8" justify="between" width="100%" align="center">
         <Box>
           <Image
             src={SolcastLogo}
