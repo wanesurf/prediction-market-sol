@@ -2,7 +2,8 @@
 
 A decentralized prediction market platform built on Solana blockchain that enables users to create, participate in, and trade on prediction markets.
 
-Link to the website: https://prediction-market-sol.vercel.app/
+Website (Dapp): https://prediction-market-sol.vercel.app/
+Github: https://github.com/wanesurf/prediction-market-sol
 
 ![Website](./website.png)
 
