@@ -105,7 +105,7 @@ export default function MarketSelector({
 
             setMarkets(marketsWithDetails);
 
-            // If we have markets and don't have a selected market, select solcast-market-11 or the first one
+            // If  we have markets and don't have a selected market, select solcast-market-11 or the first one
             if (marketsWithDetails.length > 0 && !selectedMarketId) {
               const solcastMarket = marketsWithDetails.find(
                 (market) => market.id === "solcast-market-11"
