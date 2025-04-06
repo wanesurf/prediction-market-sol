@@ -105,9 +105,16 @@ export default function MarketSelector({
 
             setMarkets(marketsWithDetails);
 
-            // If we have markets and don't have a selected market, select the first one
+            // If we have markets and don't have a selected market, select solcast-market-11 or the first one
             if (marketsWithDetails.length > 0 && !selectedMarketId) {
-              onMarketSelect(marketsWithDetails[0].address.toString());
+              const solcastMarket = marketsWithDetails.find(
+                (market) => market.id === "solcast-market-11"
+              );
+              onMarketSelect(
+                solcastMarket
+                  ? solcastMarket.address.toString()
+                  : marketsWithDetails[0].address.toString()
+              );
             }
 
             setLoading(false);
@@ -176,9 +183,16 @@ export default function MarketSelector({
 
                 setMarkets(marketsWithDetails);
 
-                // If we have markets and don't have a selected market, select the first one
+                // If we have markets and don't have a selected market, select solcast-market-11 or the first one
                 if (marketsWithDetails.length > 0 && !selectedMarketId) {
-                  onMarketSelect(marketsWithDetails[0].address.toString());
+                  const solcastMarket = marketsWithDetails.find(
+                    (market) => market.id === "solcast-market-11"
+                  );
+                  onMarketSelect(
+                    solcastMarket
+                      ? solcastMarket.address.toString()
+                      : marketsWithDetails[0].address.toString()
+                  );
                 }
 
                 setLoading(false);
@@ -238,9 +252,16 @@ export default function MarketSelector({
           if (marketAccounts.length > 0) {
             setMarkets(marketAccounts);
 
-            // If we have markets and don't have a selected market, select the first one
+            // If we have markets and don't have a selected market, select solcast-market-11 or the first one
             if (!selectedMarketId) {
-              onMarketSelect(marketAccounts[0].address.toString());
+              const solcastMarket = marketAccounts.find(
+                (market) => market.id === "solcast-market-11"
+              );
+              onMarketSelect(
+                solcastMarket
+                  ? solcastMarket.address.toString()
+                  : marketAccounts[0].address.toString()
+              );
             }
 
             setLoading(false);
@@ -270,7 +291,11 @@ export default function MarketSelector({
           setMarkets([marketInfo]);
 
           if (!selectedMarketId) {
-            onMarketSelect(knownMarketAddress.toString());
+            const solcastMarket =
+              marketInfo.id === "solcast-market-11"
+                ? marketInfo.address.toString()
+                : marketInfo.address.toString();
+            onMarketSelect(solcastMarket);
           }
 
           setLoading(false);

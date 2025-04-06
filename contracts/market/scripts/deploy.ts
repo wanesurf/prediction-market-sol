@@ -43,12 +43,12 @@ async function main() {
   console.log("Market account:", marketAccount.publicKey.toString());
   
   // Market parameters
-  const marketId = "solcast-market-10";
+  const marketId = "solcast-market-11";
   const options = ["Yes", "No"];
-  const endTime = Math.floor(Date.now() / 1000) + 86400 * 7; // 7 days from now
+  const endTime = Math.floor(Date.now() / 1000) + 86400 * 7; 
   const bannerUrl = "https://example.com/market-banner.jpg";
-  const description = "First Solcast prediction market on the new program";
-  const title = "(10) Will Solana reach $200 by the end of 2025?";
+  const description = "Will Solcast Win the Solana Hackathon? Let's find out together!";
+  const title = "Solcast Wins the Solana Hackathon";
   const endTimeString = new Date(endTime * 1000).toISOString();
   const startTimeString = new Date().toISOString();
   const resolutionSource = "https://coingecko.com/en/coins/solana";
