@@ -173,7 +173,7 @@ pub mod solcast {
         Ok(())
     }
 
-    pub fn withdraw(ctx: Context<Withdraw>, market_id: String) -> Result<()> {
+    pub fn withdraw_winnings(ctx: Context<WithdrawWinnings>, market_id: String) -> Result<()> {
         let market = &mut ctx.accounts.market;
 
         // Check if market exists
@@ -333,7 +333,7 @@ pub struct ResolveMarket<'info> {
 
 #[derive(Accounts)]
 #[instruction(market_id: String)]
-pub struct Withdraw<'info> {
+pub struct WithdrawWinnings<'info> {
     #[account(mut)]
     pub market: Account<'info, Market>,
 
