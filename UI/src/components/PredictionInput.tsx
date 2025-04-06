@@ -692,41 +692,110 @@ export default function PredictionInput({
           {/* Add calculated potential winnings display */}
           {amount && Number(amount) > 0 && (
             <div className="mt-2 p-3 bg-white/5 rounded-lg">
-              <button
-                onClick={() => setShowEstimatedWinnings(!showEstimatedWinnings)}
-                className="flex items-center justify-between w-full text-sm text-white/80 mb-2"
-              >
-                <span>Estimated Winnings</span>
-                <span className="text-xs">
-                  {showEstimatedWinnings ? "▼" : "▶"}
-                </span>
-              </button>
-
-              {showEstimatedWinnings && (
-                <div className="flex justify-between">
-                  <div>
-                    <div
-                      className={`${
-                        option === "Yes" ? "text-green-500" : "text-red-500"
-                      } font-semibold`}
-                    >
-                      {option}:{" "}
-                      {option === "Yes"
-                        ? `${potentialWinnings.yes.toFixed(2)} SOL`
-                        : `${potentialWinnings.no.toFixed(2)} SOL`}
-                    </div>
-                    {tokenPrice > 0 && (
-                      <div className="text-sm text-white/60">
-                        ≈ $
-                        {option === "Yes"
-                          ? (potentialWinnings.yes * tokenPrice).toFixed(2)
-                          : (potentialWinnings.no * tokenPrice).toFixed(2)}{" "}
-                        USD
-                      </div>
-                    )}
+              <div className="flex items-center justify-between w-full text-sm text-white/80 mb-2">
+                <span className="font-semibold">Potential Winnings</span>
+                <div className="relative group">
+                  <span className="text-xs text-white/60 cursor-help">
+                    Based on current market odds
+                  </span>
+                  <div className="absolute right-0 bottom-full mb-2 w-64 p-2 bg-gray-800 text-xs text-white rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                    <p>Potential winnings are calculated based on:</p>
+                    <ul className="list-disc pl-2 mt-1">
+                      <li>Current market odds</li>
+                      <li>Your bet amount</li>
+                      <li>5% platform commission</li>
+                    </ul>
+                    <p className="mt-1">
+                      Higher odds = higher potential returns
+                    </p>
                   </div>
                 </div>
-              )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div
+                  className={`p-2 rounded-lg ${
+                    option === "Yes" ? "bg-green-500/20" : "bg-white/5"
+                  } ${
+                    potentialWinnings.yes > potentialWinnings.no
+                      ? "border border-green-500/50"
+                      : ""
+                  }`}
+                >
+                  <div className="text-green-500 font-semibold flex items-center">
+                    YES: {potentialWinnings.yes.toFixed(2)} SOL
+                    {potentialWinnings.yes > potentialWinnings.no && (
+                      <span className="ml-1 text-xs bg-green-500/30 px-1 rounded">
+                        Best Return
+                      </span>
+                    )}
+                  </div>
+                  {tokenPrice > 0 && (
+                    <div className="text-sm text-white/60">
+                      ≈ ${(potentialWinnings.yes * tokenPrice).toFixed(2)} USD
+                    </div>
+                  )}
+                  <div className="text-xs text-white/60 mt-1">
+                    Return:{" "}
+                    {(
+                      (potentialWinnings.yes / Number(amount) - 1) *
+                      100
+                    ).toFixed(1)}
+                    %
+                  </div>
+                </div>
+                <div
+                  className={`p-2 rounded-lg ${
+                    option === "No" ? "bg-red-500/20" : "bg-white/5"
+                  } ${
+                    potentialWinnings.no > potentialWinnings.yes
+                      ? "border border-red-500/50"
+                      : ""
+                  }`}
+                >
+                  <div className="text-red-500 font-semibold flex items-center">
+                    NO: {potentialWinnings.no.toFixed(2)} SOL
+                    {potentialWinnings.no > potentialWinnings.yes && (
+                      <span className="ml-1 text-xs bg-red-500/30 px-1 rounded">
+                        Best Return
+                      </span>
+                    )}
+                  </div>
+                  {tokenPrice > 0 && (
+                    <div className="text-sm text-white/60">
+                      ≈ ${(potentialWinnings.no * tokenPrice).toFixed(2)} USD
+                    </div>
+                  )}
+                  <div className="text-xs text-white/60 mt-1">
+                    Return:{" "}
+                    {(
+                      (potentialWinnings.no / Number(amount) - 1) *
+                      100
+                    ).toFixed(1)}
+                    %
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2 text-xs text-white/60 flex items-center justify-between">
+                <p>
+                  Best potential return:{" "}
+                  {potentialWinnings.yes > potentialWinnings.no ? "YES" : "NO"}
+                </p>
+                <p
+                  className={`${
+                    potentialWinnings.yes > potentialWinnings.no
+                      ? "text-green-500"
+                      : "text-red-500"
+                  }`}
+                >
+                  {Math.max(
+                    (potentialWinnings.yes / Number(amount) - 1) * 100,
+                    (potentialWinnings.no / Number(amount) - 1) * 100
+                  ).toFixed(1)}
+                  %
+                </p>
+              </div>
             </div>
           )}
 
