@@ -1,6 +1,16 @@
 # Solcast Prediction Market
 
-A decentralized prediction market platform built on Solana blockchain.
+A decentralized prediction market platform built on Solana blockchain that enables users to create, participate in, and trade on prediction markets.
+
+## Table of Contents
+
+- [Features](#features)
+- [Getting Started](#getting-started)
+- [Smart Contract](#smart-contract)
+- [Project Structure](#project-structure)
+- [Market Operations](#market-operations)
+- [Technical Details](#technical-details)
+- [License](#license)
 
 ## Features
 
@@ -8,6 +18,8 @@ A decentralized prediction market platform built on Solana blockchain.
 - Buy shares in market outcomes
 - View market statistics and trends
 - Withdraw winnings when markets are resolved
+- Secure fund management through Program Derived Addresses (PDAs)
+- Automated market resolution
 
 ## Getting Started
 
@@ -47,7 +59,7 @@ yarn dev
 
 ## Smart Contract
 
-The smart contract is located in the `contracts/market` directory. It's built using the Anchor framework.
+The smart contract is located in the `contracts/market` directory and is built using the Anchor framework.
 
 ### Deploying the Contract
 
@@ -66,75 +78,103 @@ anchor build
 3. Deploy the contract:
 
 ```bash
-anchor deploy
+anchor deploy --provider.cluster devnet
+```
+
+### Contract Details
+
+- **Program ID**: 7QDrqqkxpti8WN4amvMHmcmZtonYeAzYrmdXefvEx3xJ
+- **Deployment Command**:
+
+```bash
+ANCHOR_PROVIDER_URL=https://api.devnet.solana.com ANCHOR_WALLET=~/.config/solana/id.json yarn deploy
 ```
 
 ## Project Structure
 
-- `src/` - Frontend application code
-  - `app/` - Next.js app router pages
-  - `components/` - React components
-  - `idl/` - Solana program IDL
-- `contracts/` - Solana smart contract code
-  - `market/` - Prediction market program
+```
+├── src/                    # Frontend application code
+│   ├── app/               # Next.js app router pages
+│   ├── components/        # React components
+│   └── idl/              # Solana program IDL
+└── contracts/             # Solana smart contract code
+    └── market/           # Prediction market program
+```
+
+## Market Operations
+
+### Creating a Market
+
+Use the following command to create a new market:
+
+```bash
+npm run create-market <marketId> <optionA> <optionB> <endTime> <title> <description>
+```
+
+Parameters:
+
+- `marketId`: Unique identifier for the market (no spaces, use hyphens)
+- `optionA`: Text for the "Yes" option
+- `optionB`: Text for the "No" option
+- `endTime`: When the market will end (UNIX timestamp or date string like "2025-12-31")
+- `title`: Title of the market
+- `description`: Detailed description of the market conditions
+
+Example:
+
+```bash
+npm run create-market btc-100k-2025 "Yes" "No" "2025-12-31" "Will BTC exceed $100K in 2025?" "This market resolves to YES if the price of Bitcoin exceeds $100,000 USD at any point during 2025 according to Coinbase."
+```
+
+### Closing a Market
+
+To close a market and resolve it:
+
+```bash
+ts-node scripts/close-market.ts <market-id> <outcome>
+```
+
+## Technical Details
+
+### Token System
+
+The platform uses SPL tokens for market operations:
+
+1. **Token Creation**:
+
+   - Two SPL tokens are created per market (YES and NO options)
+   - Token mint authority is a PDA (Program Derived Addresses) controlled by the Solcast program
+   - Only the program can mint new tokens
+
+2. **Market Authority**:
+   - Acts as a secure escrow account for market funds
+   - Verifies market ownership and legitimacy
+   - Manages withdrawal mechanisms
+   - Deterministically derived from market ID
+   - Ensures secure and trustless fund management
+
+### Market Creation Example
+
+```bash
+anchor call create_market \
+ --args '{"id":"market1", "options":["Yes", "No"], "end_time":"1714983467", "buy_token":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", "banner_url":"https://example.com/banner.jpg", "description":"Will BTC hit 100k in 2025?", "title":"BTC 100k", "end_time_string":"Dec 31, 2025", "start_time_string":"Jan 1, 2025", "resolution_source":"CoinGecko"}' \
+ --program-id 7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS
+```
+
+## System Sequence Diagrams
+
+### Present
+
+The present sequence diagram shows the flow developed during the hackathon.
+
+![Present](./sequence_present.png)
+
+### Future
+
+This is the sequence diagram of the future, improved flow. Ideally users should reveive actual shares in the form of Tokens (SPL). This is more aligned with the real world, where users can trade shares on other platforms before the market is resolved.
+
+![Future](./sequence_future.png)
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-npm run create-market <marketId> <optionA> <optionB> <endTime> <title> <description>
-
-Parameters:
-
-marketId: Unique identifier for the market (no spaces, use hyphens)
-optionA: Text for the "Yes" option
-optionB: Text for the "No" option
-endTime: When the market will end (can be UNIX timestamp or date string like "2025-12-31")
-title: Title of the market
-description: Detailed description of the market conditions
-
-example:
-
-npm run create-market btc-100k-2025 "Yes" "No" "2025-12-31" "Will BTC exceed $100K in 2025?" "This market resolves to YES if the price of Bitcoin exceeds $100,000 USD at any point during 2025 according to Coinbase."
-
-Token Creation via SPL
-Yes, the contract does create the option tokens directly using the SPL token program. Here's how it works:
-
-Token Creation: In the create_market instruction, the contract creates two SPL tokens:
-
-One for the "YES" option (token_a_mint)
-One for the "NO" option (token_b_mint)
-
-Token Mint Authority: The mint authority for both tokens is a Program Derived Address (PDA) controlled by the Solcast program. This ensures that only the program can mint new tokens.
-Token Minting: When a user buys shares, the contract:
-
-Transfers the user's SOL (or other token) to the market's escrow account
-Mints the corresponding option tokens (YES or NO) to the user's token account
-
-Token Management: The contract keeps track of all shares and maintains the relationship between option tokens and market outcomes.
-
-deploy contract:
-
-anchor deploy --provider.cluster devnet
-
-Deployed Contract:
-Program Id: 7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS
-
-Signature: 2HoCUmwMc9HtMMYD95tNMofXxe4wytK2VSuATbNJjZsaTFA28HXiAUEfKsPYvgGcAcE4n6H4XFrfYi2wVfSTztQ3
-
-Make script executable:
-
-chmod +x create-market.sh
-
-anchor call create_market \
- --args '{"id":"market1", "options":["Yes", "No"], "end_time":"1714983467", "buy_token":"4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", "banner_url":"https://example.com/banner.jpg", "description":"Will BTC hit 100k in 2025?", "title":"BTC 100k", "end_time_string":"Dec 31, 2025", "start_time_string":"Jan 1, 2025", "resolution_source":"CoinGecko"}' \
- --program-id 7xMuyXtTipSYeTWb4esdnXyVrs63FeDp7RaEjRzvYUQS
-
-ANCHOR_PROVIDER_URL=https://api.devnet.solana.com ANCHOR_WALLET=~/.config/solana/id.json yarn deploy
-
-Market creation: https://explorer.solana.com/tx/XPHjaLxnKRbX1JCJABV8FaqirgWZqhCAMwVhWszaYicFbhdCjPTtVmjF7vGzWe5Maik6uCQKni7SJiQAxmeR25e?cluster=devnet
-
-Market account: 76czyTVwN2FaydgGbVWghKPGHgHvWxPyKiUW6ktC9XY8
-Token A mint: DB29TjxUTHD8pGTk3kDycUYZHhc5kAk1FTNBPN9QXdTD
-Token B mint: EVLo3ebhbfN4GN8TvgSQLxLnZxXPztzHKZsLAk8Z1L9q
-Market authority: 8XnqwsHUeajDbJio9Au7u8yEoxfvvsNW5j7pQGy5cmWh

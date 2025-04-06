@@ -1,0 +1,114 @@
+@startuml Solcast Contract Flow
+
+actor Admin
+actor User
+participant "Solcast Program" as SolcastProgram
+participant "State Account" as State
+participant "Market Account" as Market
+participant "Market Authority PDA" as MarketAuthority
+participant "System Program" as SystemProgram
+
+== Program Initialization ==
+
+Admin -> SolcastProgram: initialize()
+SolcastProgram -> State: create new state account
+State --> SolcastProgram: state created with admin pubkey
+SolcastProgram --> Admin: initialization complete
+
+== Market Creation ==
+
+Admin -> SolcastProgram: create_market(id, options, endTime, etc)
+SolcastProgram -> State: validate admin
+State --> SolcastProgram: admin verified
+SolcastProgram -> MarketAuthority: derive PDA (seeds = ["market_authority", id])
+MarketAuthority --> SolcastProgram: authority PDA returned
+SolcastProgram -> Market: create market account
+Market --> SolcastProgram: market created
+SolcastProgram -> Market: initialize with options, end time, etc
+Market --> SolcastProgram: market initialized
+SolcastProgram -> State: add market ID to state.market_ids
+SolcastProgram -> State: add market address to state.market_addresses
+State --> SolcastProgram: state updated
+SolcastProgram --> Admin: market created successfully
+
+== Buy Shares ==
+
+User -> SolcastProgram: buy_share(marketId, option, amount)
+SolcastProgram -> Market: validate market not resolved
+Market --> SolcastProgram: validation passed
+SolcastProgram -> Market: validate option is valid
+Market --> SolcastProgram: option valid
+
+SolcastProgram -> Market: Update total_value += amount
+
+alt User chose Option A
+    SolcastProgram -> Market: Update total_option_a += amount
+else User chose Option B
+    SolcastProgram -> Market: Update total_option_b += amount
+end
+
+SolcastProgram -> Market: Add share to shares vector
+Market --> SolcastProgram: market updated
+
+SolcastProgram -> SystemProgram: Transfer SOL from user to market authority
+SystemProgram -> MarketAuthority: SOL transferred
+SystemProgram --> SolcastProgram: transfer complete
+
+SolcastProgram --> User: Share purchase complete
+
+== Resolve Market ==
+
+Admin -> SolcastProgram: resolve(marketId, winningOption)
+SolcastProgram -> Market: validate market not already resolved
+Market --> SolcastProgram: validation passed
+SolcastProgram -> Market: validate winning option is valid
+Market --> SolcastProgram: winning option valid
+
+SolcastProgram -> Market: Set resolved=true
+
+alt Winning Option is Option A
+    SolcastProgram -> Market: Set outcome = OutcomeState::OptionA
+else Winning Option is Option B
+    SolcastProgram -> Market: Set outcome = OutcomeState::OptionB
+end
+
+Market --> SolcastProgram: market resolved
+SolcastProgram --> Admin: market resolution complete
+
+== Withdraw Winnings ==
+
+User -> SolcastProgram: withdraw_winnings(marketId)
+SolcastProgram -> Market: check if market resolved
+Market --> SolcastProgram: market is resolved
+
+alt Market Outcome is OptionA
+    SolcastProgram -> Market: winning_option = option_a
+else Market Outcome is OptionB
+    SolcastProgram -> Market: winning_option = option_b
+end
+
+SolcastProgram -> Market: find user's share with matching option
+
+alt No matching share found
+    Market --> SolcastProgram: No winning shares
+    SolcastProgram --> User: Error: NoWinningShares
+else Share already withdrawn
+    Market --> SolcastProgram: Share has_withdrawn = true
+    SolcastProgram --> User: Error: AlreadyWithdrawn
+else Valid winning share
+    Market --> SolcastProgram: Share found
+    
+    SolcastProgram -> Market: Calculate user's winnings
+    note right: Calculate user_share_ratio\nApply 5% commission\nDetermine final_payout
+    
+    SolcastProgram -> Market: Mark share as withdrawn
+    Market --> SolcastProgram: Share updated
+    
+    SolcastProgram -> SystemProgram: Transfer SOL from market authority to user\n(signed by PDA using authority_bump)
+    SystemProgram -> User: SOL transferred
+    SystemProgram --> SolcastProgram: transfer complete
+    
+    SolcastProgram --> User: Withdrawal complete
+end
+
+@enduml
