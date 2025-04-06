@@ -122,15 +122,15 @@ export const idl: Idl = {
       ],
     },
     {
-      name: "withdraw",
+      name: "withdrawWinnings",
       accounts: [
         { name: "market", isMut: true, isSigner: false },
         { name: "user", isMut: true, isSigner: true },
-        { name: "market_authority", isMut: true, isSigner: false },
-        { name: "system_program", isMut: false, isSigner: false },
+        { name: "marketAuthority", isMut: true, isSigner: false },
+        { name: "systemProgram", isMut: false, isSigner: false },
       ],
       args: [
-        { name: "market_id", type: "string" },
+        { name: "marketId", type: "string" },
       ],
     },
   ],

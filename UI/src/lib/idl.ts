@@ -13,6 +13,37 @@ export const idl = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "withdraw",
+      "accounts": [
+        {
+          "name": "market",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "market_authority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "system_program",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "market_id",
+          "type": "string"
+        }
+      ]
     }
   ],
   "accounts": [

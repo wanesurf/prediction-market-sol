@@ -21,7 +21,8 @@
           "signer": true
         },
         {
-          "name": "market_authority"
+          "name": "market_authority",
+          "writable": true
         },
         {
           "name": "system_program",
@@ -192,8 +193,8 @@
       ]
     },
     {
-      "name": "withdraw",
-      "discriminator": [183, 18, 70, 156, 148, 109, 161, 34],
+      "name": "withdraw_winnings",
+      "discriminator": [75, 180, 148, 117, 81, 100, 169, 50],
       "accounts": [
         {
           "name": "market",
@@ -205,7 +206,8 @@
           "signer": true
         },
         {
-          "name": "market_authority"
+          "name": "market_authority",
+          "writable": true
         },
         {
           "name": "system_program",

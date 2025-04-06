@@ -60,6 +60,9 @@ export default function PredictionInput({
   const { connection } = useConnection();
   const wallet = useWallet();
 
+  // Explicit system program ID
+  const SYSTEM_PROGRAM_ID = new PublicKey("11111111111111111111111111111111");
+
   // Add window size state for confetti
   const [windowSize, setWindowSize] = useState({
     width: typeof window !== "undefined" ? window.innerWidth : 0,
@@ -265,7 +268,7 @@ export default function PredictionInput({
 
       // Get the market authority PDA
       const [marketAuthority, bump] = PublicKey.findProgramAddressSync(
-        [Buffer.from("market_authority"), Buffer.from(marketId as string)],
+        [Buffer.from("market_authority"), Buffer.from(marketId)],
         program.programId
       );
 
@@ -298,11 +301,6 @@ export default function PredictionInput({
         optionBMatch: marketData.optionB === marketAccountData.optionB,
       });
 
-      // Explicit system program ID
-      const SYSTEM_PROGRAM_ID = new PublicKey(
-        "11111111111111111111111111111111"
-      );
-
       // Comprehensive logging of transaction details
       console.log("Transaction Preparation Details:", {
         marketId,
@@ -310,7 +308,7 @@ export default function PredictionInput({
         amountLamports,
         marketAccount: marketAccount.toString(),
         publicKey: publicKey.toString(),
-        systemProgramId: SYSTEM_PROGRAM_ID.toString(),
+        systemProgram: SYSTEM_PROGRAM_ID.toString(),
         marketAuthority: marketAuthority.toString(),
       });
 
@@ -337,6 +335,13 @@ export default function PredictionInput({
           message: `Successfully placed ${option} prediction of ${amount} SOL!`,
           txid: signature,
         });
+
+        // Show confetti animation
+        setShowConfetti(true);
+        // Hide confetti after 5 seconds
+        setTimeout(() => {
+          setShowConfetti(false);
+        }, 5000);
 
         // Refresh market data
         fetchMarketData();
@@ -429,19 +434,21 @@ export default function PredictionInput({
       });
 
       const program = new Program(idl, SOLCAST_PROGRAM_ID, provider);
-      if (!program) return;
+      if (!program) {
+        notify({ type: "error", message: "Failed to initialize program" });
+        return;
+      }
 
       // Fetch the market account data to get the market authority
       const marketAccountData = await program.account.market.fetch(
         marketAccount
       );
 
-      // Get the market authority PDA
+      const marketId = marketAccountData.id as string;
+
+      // Get the market authority PDA and bump
       const [marketAuthority, bump] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("market_authority"),
-          Buffer.from(marketAccountData.id as string),
-        ],
+        [Buffer.from("market_authority"), Buffer.from(marketId)],
         program.programId
       );
 
@@ -451,43 +458,160 @@ export default function PredictionInput({
         authority: marketAuthority.toString(),
         authorityBump: bump,
         marketAuthority: marketAccountData.authority?.toString(),
+        isMatchingAuthority: marketAuthority.equals(
+          marketAccountData.authority as PublicKey
+        ),
       });
 
-      // Create the transaction
+      // Validate that the market authority matches the one stored in the market account
+      if (
+        !marketAccountData.authority ||
+        !marketAuthority.equals(marketAccountData.authority as PublicKey)
+      ) {
+        console.error("Market authority mismatch:", {
+          derived: marketAuthority.toString(),
+          stored: marketAccountData.authority?.toString(),
+        });
+        notify({
+          type: "error",
+          message:
+            "Invalid market authority. Please try again or contact support.",
+        });
+        return;
+      }
+
+      // Log market data for debugging
+      console.log("Withdraw - Market Data:", {
+        id: marketAccountData.id,
+        resolved: marketAccountData.resolved,
+        outcome: marketAccountData.outcome,
+        totalValue: marketAccountData.totalValue
+          ? marketAccountData.totalValue.toString()
+          : "0",
+        totalOptionA: marketAccountData.totalOptionA
+          ? marketAccountData.totalOptionA.toString()
+          : "0",
+        totalOptionB: marketAccountData.totalOptionB
+          ? marketAccountData.totalOptionB.toString()
+          : "0",
+        // Log shares count safely
+        sharesCount: Array.isArray(marketAccountData.shares)
+          ? marketAccountData.shares.length
+          : 0,
+        // Log user shares safely
+        userShares: Array.isArray(marketAccountData.shares)
+          ? marketAccountData.shares
+              .filter((s: any) => s.user && s.user.equals(publicKey))
+              .map((s: any) => ({
+                option: s.option,
+                amount: s.amount ? s.amount.toString() : "0",
+                hasWithdrawn: s.hasWithdrawn,
+              }))
+          : [],
+      });
+
+      // Check if user has winning shares
+      const winningOption =
+        marketAccountData.outcome === "OptionA"
+          ? marketAccountData.optionA
+          : marketAccountData.outcome === "OptionB"
+          ? marketAccountData.optionB
+          : null;
+
+      console.log("Withdraw - Winning Option:", {
+        outcome: marketAccountData.outcome,
+        winningOption,
+        userShares: Array.isArray(marketAccountData.shares)
+          ? marketAccountData.shares
+              .filter((s: any) => s.user && s.user.equals(publicKey))
+              .map((s: any) => ({
+                option: s.option,
+                amount: s.amount ? s.amount.toString() : "0",
+                hasWithdrawn: s.hasWithdrawn,
+                isWinningOption: s.option === winningOption,
+              }))
+          : [],
+      });
+
+      // Create the transaction (user will sign via sendTransaction)
       const ix = await program.methods
-        .withdraw(marketAccountData.id)
+        .withdrawWinnings(marketId)
         .accounts({
           market: marketAccount,
           user: publicKey,
           marketAuthority: marketAuthority,
-          systemProgram: SystemProgram.programId,
+          systemProgram: SYSTEM_PROGRAM_ID,
         })
         .instruction();
 
-      // Create and send transaction
+      // Log transaction details
+      console.log("Withdraw - Transaction Details:", {
+        marketId,
+        marketAccount: marketAccount.toString(),
+        user: publicKey.toString(),
+        marketAuthority: marketAuthority.toString(),
+        systemProgram: SYSTEM_PROGRAM_ID.toString(),
+      });
+
+      // Add the instruction to the transaction
       const transaction = new Transaction().add(ix);
-      const { blockhash } = await connection.getRecentBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
 
       try {
+        // Set the fee payer
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = publicKey;
+
+        // Simulate the transaction first
+        console.log("Simulating transaction...");
+        const simulation = await connection.simulateTransaction(transaction);
+        console.log(
+          "Transaction simulation result:",
+          JSON.stringify(simulation, null, 2)
+        );
+
+        if (simulation.value.err) {
+          console.error("Transaction simulation failed:", simulation.value.err);
+          notify({
+            type: "error",
+            message: `Transaction simulation failed: ${JSON.stringify(
+              simulation.value.err
+            )}`,
+          });
+          return;
+        }
+
+        // Send the transaction
+        console.log("Sending transaction...");
         const signature = await sendTransaction(transaction, connection);
-        await connection.confirmTransaction(signature, "confirmed");
+        console.log("Withdraw transaction sent:", signature);
 
-        // Show confetti on successful withdrawal
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 5000); // Hide confetti after 5 seconds
+        // Wait for confirmation
+        console.log("Waiting for confirmation...");
+        const confirmation = await connection.confirmTransaction(signature);
+        console.log("Withdraw transaction confirmed:", confirmation);
 
+        // Show success message
         notify({
           type: "success",
-          message: "Successfully withdrew SOL winnings!",
+          message: "Successfully withdrew winnings!",
           txid: signature,
         });
+
+        // Show confetti animation
+        setShowConfetti(true);
+        // Hide confetti after 5 seconds
+        setTimeout(() => {
+          setShowConfetti(false);
+        }, 5000);
 
         // Refresh market data
         fetchMarketData();
       } catch (error: any) {
-        console.error("Withdraw transaction error details:", error);
+        console.error("Withdraw transaction error:", error);
+
+        // Log the full error object
+        console.error("Full error object:", JSON.stringify(error, null, 2));
 
         // Check for specific error types
         if (error.message && error.message.includes("InvalidMarketAuthority")) {
@@ -665,318 +789,338 @@ export default function PredictionInput({
   }
 
   return (
-    <Card className="shadow-2xl w-full h-full flex flex-col items-center justify-start">
-      {/* Add confetti component */}
+    <>
+      {/* Add confetti component outside the Card */}
       {showConfetti && (
-        <ReactConfetti
-          width={windowSize.width}
-          height={windowSize.height}
-          numberOfPieces={200}
-          recycle={false}
-          colors={["#22c55e", "#10b981", "#059669", "#047857"]}
-        />
-      )}
-
-      {marketData && (
-        <div className="w-full text-center mb-4">
-          <h2 className="text-xl font-bold text-white">{marketData.title}</h2>
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 1000,
+            pointerEvents: "none",
+          }}
+        >
+          <ReactConfetti
+            width={windowSize.width}
+            height={windowSize.height}
+            numberOfPieces={200}
+            recycle={false}
+            colors={["#22c55e", "#10b981", "#059669", "#047857"]}
+          />
         </div>
       )}
-
-      <div className="flex justify-center w-full">
-        <img
-          // @ts-ignore
-          src={currentGif.src}
-          alt="Prediction Market"
-          className="rounded-lg w-24 h-24 sm:w-32 sm:h-32"
-        />
-      </div>
-
-      {(isLoading || loading) && !marketData ? (
-        <div className="w-full my-20">
-          <Skeleton className="w-full h-12" />
-          <Skeleton className="w-full h-8 mt-2" />
-        </div>
-      ) : (
-        <div className="space-y-4 my-10 w-full">
-          <VoteBar yesPercentage={yesPercentage} noPercentage={noPercentage} />
-
-          {marketData && (
-            <div className="flex justify-between text-white/70 text-sm px-1">
-              <div>YES: {marketData.totalOptionA?.toFixed(2) || 0} SOL</div>
-              <div>NO: {marketData.totalOptionB?.toFixed(2) || 0} SOL</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Only show option selection if market is not resolved */}
-      {marketData && !marketData.resolved && (
-        <div className="grid grid-cols-2 gap-4 w-full">
-          <Button
-            className={`h-12 text-sm font-semibold ${
-              option === "Yes"
-                ? "bg-green-500 hover:bg-green-600 text-white"
-                : "bg-green-500/20 hover:bg-green-600/30 text-white"
-            }`}
-            onClick={() => {
-              setOption("Yes");
-              setCurrentGif(up_higher);
-            }}
-          >
-            {marketData.optionA || "Yes"}
-          </Button>
-          <Button
-            className={`h-12 text-sm font-semibold ${
-              option === "No"
-                ? "bg-red-500 hover:bg-red-600 text-white"
-                : "bg-red-500/20 hover:bg-red-600/30 text-white"
-            }`}
-            onClick={() => {
-              setOption("No");
-              setCurrentGif(decide_no);
-            }}
-          >
-            {marketData.optionB || "No"}
-          </Button>
-        </div>
-      )}
-
-      {/* Show resolved status if market is resolved */}
-      {marketData && marketData.resolved && (
-        <div className="w-full text-center mb-6">
-          <div className="bg-indigo-600/30 rounded-lg p-3">
-            <p className="text-white font-medium">
-              Market Resolved to: {marketData.outcome}
-            </p>
+      <Card className="shadow-2xl w-full h-full flex flex-col items-center justify-start">
+        {marketData && (
+          <div className="w-full text-center mb-4">
+            <h2 className="text-xl font-bold text-white">{marketData.title}</h2>
           </div>
+        )}
 
-          {/* Display user's winnings if available */}
-          {connected && userWinnings !== null && (
-            <div className="mt-4 p-4 bg-white/5 rounded-lg">
-              <h3 className="text-lg font-semibold text-white mb-2">
-                Your Winnings
-              </h3>
-              {userWinnings > 0 ? (
-                <>
-                  <p className="text-2xl font-bold text-green-500">
-                    {userWinnings.toFixed(4)} SOL
-                  </p>
-                  {tokenPrice > 0 && (
-                    <p className="text-sm text-white/60">
-                      ≈ ${(userWinnings * tokenPrice).toFixed(2)} USD
-                    </p>
-                  )}
-                  {hasWithdrawn ? (
-                    <p className="text-sm text-white/60 mt-2">
-                      You have already withdrawn your winnings
-                    </p>
-                  ) : (
-                    <Button
-                      className="w-full h-12 mt-4 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-all duration-300"
-                      onClick={withdrawWinnings}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? "Processing..." : "Withdraw SOL Winnings"}
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <p className="text-white/70">
-                  You don't have any winning shares for this market
-                </p>
-              )}
-            </div>
-          )}
+        <div className="flex justify-center w-full">
+          <img
+            // @ts-ignore
+            src={currentGif.src}
+            alt="Prediction Market"
+            className="rounded-lg w-24 h-24 sm:w-32 sm:h-32"
+          />
+        </div>
 
-          {connected && marketData.resolved && userWinnings === null && (
+        {(isLoading || loading) && !marketData ? (
+          <div className="w-full my-20">
+            <Skeleton className="w-full h-12" />
+            <Skeleton className="w-full h-8 mt-2" />
+          </div>
+        ) : (
+          <div className="space-y-4 my-10 w-full">
+            <VoteBar
+              yesPercentage={yesPercentage}
+              noPercentage={noPercentage}
+            />
+
+            {marketData && (
+              <div className="flex justify-between text-white/70 text-sm px-1">
+                <div>YES: {marketData.totalOptionA?.toFixed(2) || 0} SOL</div>
+                <div>NO: {marketData.totalOptionB?.toFixed(2) || 0} SOL</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Only show option selection if market is not resolved */}
+        {marketData && !marketData.resolved && (
+          <div className="grid grid-cols-2 gap-4 w-full">
             <Button
-              className="w-full h-12 mt-4 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-all duration-300"
-              onClick={withdrawWinnings}
-              disabled={isLoading}
+              className={`h-12 text-sm font-semibold ${
+                option === "Yes"
+                  ? "bg-green-500 hover:bg-green-600 text-white"
+                  : "bg-green-500/20 hover:bg-green-600/30 text-white"
+              }`}
+              onClick={() => {
+                setOption("Yes");
+                setCurrentGif(up_higher);
+              }}
             >
-              {isLoading ? "Processing..." : "Withdraw SOL Winnings"}
+              {marketData.optionA || "Yes"}
             </Button>
-          )}
-        </div>
-      )}
-
-      {/* Show Connect Wallet button if wallet is not connected */}
-      {!connected && (
-        <div className="w-full mt-6">
-          <WalletMultiButton className="w-full h-12 text-sm font-semibold bg-violet-600 hover:bg-violet-800 text-white transition-all duration-300 flex items-center justify-center" />
-        </div>
-      )}
-
-      {/* Show amount input and place prediction button only if wallet is connected and market not resolved */}
-      {connected && marketData && !marketData.resolved && (
-        <div className="space-y-4 w-full mt-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-white/80">
-              Amount (SOL)
-            </label>
-            <div className="relative">
-              <img
-                // @ts-ignore
-                src={solana.src}
-                alt="SOL"
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-white/50"
-              />
-              <Input
-                type="tel"
-                inputMode="decimal"
-                placeholder="Enter SOL amount"
-                value={amount}
-                onChange={(e) => handleAmountChange(e.target.value)}
-                className="pl-10 h-12 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:ring-2 focus:ring-purple-500"
-              />
-            </div>
-            <div className="text-sm text-white/60">
-              {tokenPrice > 0 && (
-                <>≈ ${(Number(amount) * tokenPrice).toFixed(2)} USD</>
-              )}
-            </div>
+            <Button
+              className={`h-12 text-sm font-semibold ${
+                option === "No"
+                  ? "bg-red-500 hover:bg-red-600 text-white"
+                  : "bg-red-500/20 hover:bg-red-600/30 text-white"
+              }`}
+              onClick={() => {
+                setOption("No");
+                setCurrentGif(decide_no);
+              }}
+            >
+              {marketData.optionB || "No"}
+            </Button>
           </div>
+        )}
 
-          {/* Add calculated potential winnings display */}
-          {amount && Number(amount) > 0 && (
-            <div className="mt-2 p-3 bg-white/5 rounded-lg">
-              <div className="flex items-center justify-between w-full text-sm text-white/80 mb-2">
-                <span className="font-semibold">Potential Winnings</span>
-                <div className="relative group">
-                  <span className="text-xs text-white/60 cursor-help">
-                    Based on current market odds
-                  </span>
-                  <div className="absolute right-0 bottom-full mb-2 w-64 p-2 bg-gray-800 text-xs text-white rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
-                    <p>Potential winnings are calculated based on:</p>
-                    <ul className="list-disc pl-2 mt-1">
-                      <li>Current market odds</li>
-                      <li>Your bet amount</li>
-                      <li>5% platform commission</li>
-                    </ul>
-                    <p className="mt-1">
-                      Higher odds = higher potential returns
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div
-                  className={`p-2 rounded-lg ${
-                    option === "Yes" ? "bg-green-500/20" : "bg-white/5"
-                  } ${
-                    potentialWinnings.yes > potentialWinnings.no
-                      ? "border border-green-500/50"
-                      : ""
-                  }`}
-                >
-                  <div className="text-green-500 font-semibold flex items-center">
-                    YES: {potentialWinnings.yes.toFixed(2)} SOL
-                    {potentialWinnings.yes > potentialWinnings.no && (
-                      <span className="ml-1 text-xs bg-green-500/30 px-1 rounded">
-                        Best Return
-                      </span>
-                    )}
-                  </div>
-                  {tokenPrice > 0 && (
-                    <div className="text-sm text-white/60">
-                      ≈ ${(potentialWinnings.yes * tokenPrice).toFixed(2)} USD
-                    </div>
-                  )}
-                  <div className="text-xs text-white/60 mt-1">
-                    Return:{" "}
-                    {(
-                      (potentialWinnings.yes / Number(amount) - 1) *
-                      100
-                    ).toFixed(1)}
-                    %
-                  </div>
-                </div>
-                <div
-                  className={`p-2 rounded-lg ${
-                    option === "No" ? "bg-red-500/20" : "bg-white/5"
-                  } ${
-                    potentialWinnings.no > potentialWinnings.yes
-                      ? "border border-red-500/50"
-                      : ""
-                  }`}
-                >
-                  <div className="text-red-500 font-semibold flex items-center">
-                    NO: {potentialWinnings.no.toFixed(2)} SOL
-                    {potentialWinnings.no > potentialWinnings.yes && (
-                      <span className="ml-1 text-xs bg-red-500/30 px-1 rounded">
-                        Best Return
-                      </span>
-                    )}
-                  </div>
-                  {tokenPrice > 0 && (
-                    <div className="text-sm text-white/60">
-                      ≈ ${(potentialWinnings.no * tokenPrice).toFixed(2)} USD
-                    </div>
-                  )}
-                  <div className="text-xs text-white/60 mt-1">
-                    Return:{" "}
-                    {(
-                      (potentialWinnings.no / Number(amount) - 1) *
-                      100
-                    ).toFixed(1)}
-                    %
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-2 text-xs text-white/60 flex items-center justify-between">
-                <p>
-                  Best potential return:{" "}
-                  {potentialWinnings.yes > potentialWinnings.no ? "YES" : "NO"}
-                </p>
-                <p
-                  className={`${
-                    potentialWinnings.yes > potentialWinnings.no
-                      ? "text-green-500"
-                      : "text-red-500"
-                  }`}
-                >
-                  {Math.max(
-                    (potentialWinnings.yes / Number(amount) - 1) * 100,
-                    (potentialWinnings.no / Number(amount) - 1) * 100
-                  ).toFixed(1)}
-                  %
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Place prediction button */}
-          <Button
-            className="w-full h-12 text-sm font-semibold bg-violet-600 hover:bg-violet-700 text-white transition-all duration-300"
-            onClick={buyShares}
-            disabled={isLoading || !amount || Number(amount) <= 0}
-          >
-            {isLoading ? "Processing..." : `Place ${option} Prediction`}
-          </Button>
-        </div>
-      )}
-
-      {/* Market info */}
-      {marketData && (
-        <div className="mt-6 w-full p-4 bg-white/5 rounded-lg">
-          <p className="text-sm text-white/70 mb-4">{marketData.description}</p>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-white/60">End Time:</span>
-              <p className="text-white">
-                {new Date(marketData.endTime * 1000).toLocaleString()}
+        {/* Show resolved status if market is resolved */}
+        {marketData && marketData.resolved && (
+          <div className="w-full text-center mb-6">
+            <div className="bg-indigo-600/30 rounded-lg p-3">
+              <p className="text-white font-medium">
+                Market Resolved to: {marketData.outcome}
               </p>
             </div>
-            <div>
-              <span className="text-white/60">Resolution Source:</span>
-              <p className="text-white">{marketData.resolutionSource}</p>
+
+            {/* Display user's winnings if available */}
+            {connected && userWinnings !== null && (
+              <div className="mt-4 p-4 bg-white/5 rounded-lg">
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  Your Winnings
+                </h3>
+                {userWinnings > 0 ? (
+                  <>
+                    <p className="text-2xl font-bold text-green-500">
+                      {userWinnings.toFixed(4)} SOL
+                    </p>
+                    {tokenPrice > 0 && (
+                      <p className="text-sm text-white/60">
+                        ≈ ${(userWinnings * tokenPrice).toFixed(2)} USD
+                      </p>
+                    )}
+                    {hasWithdrawn ? (
+                      <p className="text-sm text-white/60 mt-2">
+                        You have already withdrawn your winnings
+                      </p>
+                    ) : (
+                      <Button
+                        className="w-full h-12 mt-4 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-all duration-300"
+                        onClick={withdrawWinnings}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? "Processing..." : "Withdraw SOL Winnings"}
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-white/70">
+                    You don't have any winning shares for this market
+                  </p>
+                )}
+              </div>
+            )}
+
+            {connected && marketData.resolved && userWinnings === null && (
+              <Button
+                className="w-full h-12 mt-4 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-all duration-300"
+                onClick={withdrawWinnings}
+                disabled={isLoading}
+              >
+                {isLoading ? "Processing..." : "Withdraw SOL Winnings"}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Show Connect Wallet button if wallet is not connected */}
+        {!connected && (
+          <div className="w-full mt-6">
+            <WalletMultiButton className="w-full h-12 text-sm font-semibold bg-violet-600 hover:bg-violet-800 text-white transition-all duration-300 flex items-center justify-center" />
+          </div>
+        )}
+
+        {/* Show amount input and place prediction button only if wallet is connected and market not resolved */}
+        {connected && marketData && !marketData.resolved && (
+          <div className="space-y-4 w-full mt-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white/80">
+                Amount (SOL)
+              </label>
+              <div className="relative">
+                <img
+                  // @ts-ignore
+                  src={solana.src}
+                  alt="SOL"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-white/50"
+                />
+                <Input
+                  type="tel"
+                  inputMode="decimal"
+                  placeholder="Enter SOL amount"
+                  value={amount}
+                  onChange={(e) => handleAmountChange(e.target.value)}
+                  className="pl-10 h-12 bg-white/10 border-white/20 text-white placeholder:text-white/50 focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              <div className="text-sm text-white/60">
+                {tokenPrice > 0 && (
+                  <>≈ ${(Number(amount) * tokenPrice).toFixed(2)} USD</>
+                )}
+              </div>
+            </div>
+
+            {/* Add calculated potential winnings display */}
+            {amount && Number(amount) > 0 && (
+              <div className="mt-2 p-3 bg-white/5 rounded-lg">
+                <div className="flex items-center justify-between w-full text-sm text-white/80 mb-2">
+                  <span className="font-semibold">Potential Winnings</span>
+                  <div className="relative group">
+                    <span className="text-xs text-white/60 cursor-help">
+                      Based on current market odds
+                    </span>
+                    <div className="absolute right-0 bottom-full mb-2 w-64 p-2 bg-gray-800 text-xs text-white rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                      <p>Potential winnings are calculated based on:</p>
+                      <ul className="list-disc pl-2 mt-1">
+                        <li>Current market odds</li>
+                        <li>Your bet amount</li>
+                        <li>5% platform commission</li>
+                      </ul>
+                      <p className="mt-1">
+                        Higher odds = higher potential returns
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div
+                    className={`p-2 rounded-lg ${
+                      option === "Yes" ? "bg-green-500/20" : "bg-white/5"
+                    } ${
+                      potentialWinnings.yes > potentialWinnings.no
+                        ? "border border-green-500/50"
+                        : ""
+                    }`}
+                  >
+                    <div className="text-green-500 font-semibold flex items-center">
+                      YES: {potentialWinnings.yes.toFixed(2)} SOL
+                      {potentialWinnings.yes > potentialWinnings.no && (
+                        <span className="ml-1 text-xs bg-green-500/30 px-1 rounded">
+                          Best Return
+                        </span>
+                      )}
+                    </div>
+                    {tokenPrice > 0 && (
+                      <div className="text-sm text-white/60">
+                        ≈ ${(potentialWinnings.yes * tokenPrice).toFixed(2)} USD
+                      </div>
+                    )}
+                    <div className="text-xs text-white/60 mt-1">
+                      Return:{" "}
+                      {(
+                        (potentialWinnings.yes / Number(amount) - 1) *
+                        100
+                      ).toFixed(1)}
+                      %
+                    </div>
+                  </div>
+                  <div
+                    className={`p-2 rounded-lg ${
+                      option === "No" ? "bg-red-500/20" : "bg-white/5"
+                    } ${
+                      potentialWinnings.no > potentialWinnings.yes
+                        ? "border border-red-500/50"
+                        : ""
+                    }`}
+                  >
+                    <div className="text-red-500 font-semibold flex items-center">
+                      NO: {potentialWinnings.no.toFixed(2)} SOL
+                      {potentialWinnings.no > potentialWinnings.yes && (
+                        <span className="ml-1 text-xs bg-red-500/30 px-1 rounded">
+                          Best Return
+                        </span>
+                      )}
+                    </div>
+                    {tokenPrice > 0 && (
+                      <div className="text-sm text-white/60">
+                        ≈ ${(potentialWinnings.no * tokenPrice).toFixed(2)} USD
+                      </div>
+                    )}
+                    <div className="text-xs text-white/60 mt-1">
+                      Return:{" "}
+                      {(
+                        (potentialWinnings.no / Number(amount) - 1) *
+                        100
+                      ).toFixed(1)}
+                      %
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-2 text-xs text-white/60 flex items-center justify-between">
+                  <p>
+                    Best potential return:{" "}
+                    {potentialWinnings.yes > potentialWinnings.no
+                      ? "YES"
+                      : "NO"}
+                  </p>
+                  <p
+                    className={`${
+                      potentialWinnings.yes > potentialWinnings.no
+                        ? "text-green-500"
+                        : "text-red-500"
+                    }`}
+                  >
+                    {Math.max(
+                      (potentialWinnings.yes / Number(amount) - 1) * 100,
+                      (potentialWinnings.no / Number(amount) - 1) * 100
+                    ).toFixed(1)}
+                    %
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Place prediction button */}
+            <Button
+              className="w-full h-12 text-sm font-semibold bg-violet-600 hover:bg-violet-700 text-white transition-all duration-300"
+              onClick={buyShares}
+              disabled={isLoading || !amount || Number(amount) <= 0}
+            >
+              {isLoading ? "Processing..." : `Place ${option} Prediction`}
+            </Button>
+          </div>
+        )}
+
+        {/* Market info */}
+        {marketData && (
+          <div className="mt-6 w-full p-4 bg-white/5 rounded-lg">
+            <p className="text-sm text-white/70 mb-4">
+              {marketData.description}
+            </p>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-white/60">End Time:</span>
+                <p className="text-white">
+                  {new Date(marketData.endTime * 1000).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <span className="text-white/60">Resolution Source:</span>
+                <p className="text-white">{marketData.resolutionSource}</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </Card>
+        )}
+      </Card>
+    </>
   );
 }
